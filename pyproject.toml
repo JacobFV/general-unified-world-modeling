@@ -47,6 +47,11 @@ train = [
 viz = [
     "matplotlib>=3.7",
 ]
+diagrams = [
+    "matplotlib>=3.7",
+    "cartopy>=0.22",
+    "Pillow>=9.0",
+]
 docs = [
     "mkdocs>=1.5",
     "mkdocs-material>=9.0",
@@ -61,7 +66,7 @@ dev = [
     "mkdocs-material>=9.0",
 ]
 all = [
-    "general-unified-world-model[data,train,dev,viz]",
+    "general-unified-world-model[data,train,dev,viz,diagrams]",
 ]
 
 [project.urls]

@@ -4,7 +4,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/general-unified-world-model.svg)](https://pypi.org/project/general-unified-world-model/)
 [![Tests](https://github.com/JacobFV/general-unified-world-modeling/actions/workflows/ci.yml/badge.svg)](https://github.com/JacobFV/general-unified-world-modeling/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-67%2F67-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-144%2F144-brightgreen.svg)]()
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
@@ -80,6 +80,28 @@ proj = WorldProjection(
 
 bound = project(proj, T=1, H=64, W=64, d_model=64)
 # ~200 fields, focused on what matters
+```
+
+### Or just describe what you need
+
+You don't have to construct projections by hand. Describe your modeling needs in plain English and let `general-unified-world-model` build the projection for you:
+
+```python
+from general_unified_world_model import llm_project
+
+result = llm_project(
+    "I'm a hedge fund PM. I need to model US macro, rates, credit, "
+    "and two firms: Apple and NVIDIA. I care about recession risk "
+    "and the Fed's next move.",
+    provider="anthropic",  # or "openai"
+)
+
+# The LLM selects the right fields automatically
+bound = result.compile(T=1, H=64, W=64, d_model=64)
+print(result.reasoning)
+# "Hedge fund needs financial markets (yield curves, credit spreads,
+#  equities), US macro (GDP, inflation, labor), regime indicators
+#  for recession detection, and firm-level nodes for AAPL and NVDA..."
 ```
 
 ### Train on heterogeneous data
@@ -172,6 +194,11 @@ proj = WorldProjection(
 )
 ```
 
+<p align="center">
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/usecase_ceo.png" width="90%" alt="CEO use case — causal interaction graph" />
+</p>
+<p align="center"><em>Causal interaction graph: regime conditions macro and financial context, which flows into firm dynamics. Executive decisions influence the firm. Competitive dynamics (dashed) between ACME and RIVAL. Forecasts are the structured output.</em></p>
+
 ### Government: "Model policy impact"
 
 ```python
@@ -189,6 +216,11 @@ proj = WorldProjection(
 )
 ```
 
+<p align="center">
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/usecase_government.png" width="90%" alt="Government use case — causal interaction graph" />
+</p>
+<p align="center"><em>Policy transmission graph: regime state conditions all economies. Bilateral trade and financial linkages connect countries (bidirectional arrows). Interventions propagate through the financial system and the domestic economy to produce structured forecasts.</em></p>
+
 ### Computer use agent: "Model the user's world"
 
 ```python
@@ -202,6 +234,11 @@ proj = WorldProjection(
     firms=["user_org"],
 )
 ```
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/usecase_agent.png" width="70%" alt="Agent use case — causal interaction graph" />
+</p>
+<p align="center"><em>Minimal world context for an agent: real-time events feed into the user and organization models. Regime state drives recession forecasts. User and organization are bidirectionally linked.</em></p>
 
 ## Training architecture
 
@@ -338,17 +375,20 @@ Time series views of world model fields, auto-generated or from real observation
 <img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/financial_charts.png" width="80%" alt="Financial Charts" />
 </p>
 
-### Geopolitical risk map
+### Geopolitical state map
 
-Country state projected to RGB on dual orthographic globes. Color gradient: teal (stable) → amber (elevated) → crimson (critical).
+Each country's latent state vector is projected to RGB via PCA — the color is a 3D projection of the full state representation, not a scalar risk score. Real country boundaries rendered on orthographic globes with cartopy.
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/geopolitical_map.png" width="80%" alt="Geopolitical Risk Map" />
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/geopolitical_globe.gif" width="50%" alt="Rotating Geopolitical Globe" />
+</p>
+<p align="center">
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/geopolitical_map.png" width="80%" alt="Geopolitical Dual-Hemisphere Map" />
 </p>
 
 ### Regime dashboard
 
-Gauge panels for the 12 regime state fields — the compressed world state latent that ties all domains together.
+Horizontal bars for the 12 regime state fields — value magnitude, no decoration. The compressed world state latent strip at the bottom.
 
 <p align="center">
 <img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/regime_dashboard.png" width="80%" alt="Regime Dashboard" />
@@ -356,7 +396,7 @@ Gauge panels for the 12 regime state fields — the compressed world state laten
 
 ### Social graph (CEO perspective)
 
-First-person view from a key decision-maker. Focal entity centered, concentric rings by connection strength.
+First-person entity network. Focal entity centered, others positioned by connection strength. Edge weight and color encode relationship intensity (topology-derived + structurally inferred). Field count shown inside each node.
 
 <p align="center">
 <img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/social_graph_ceo.png" width="80%" alt="CEO Social Graph" />
@@ -377,10 +417,11 @@ render(bound, "canvas_heatmap", save_path="output.png")
 
 # Or use renderer classes directly
 from general_unified_world_model.rendering import (
-    CanvasHeatmapRenderer, TopologyGraphRenderer,
+    CanvasHeatmapRenderer, TopologyGraphRenderer, CausalGraphRenderer,
     FinancialChartRenderer, GeopoliticalMapRenderer,
     RegimeDashboardRenderer, SocialGraphRenderer,
     RenderContext,
+    render_ceo_use_case, render_government_use_case, render_agent_use_case,
 )
 
 ctx = RenderContext(bound_schema=bound, title="My Model")
@@ -462,7 +503,7 @@ pytest
 ### Running tests
 
 ```bash
-# Full suite (67 tests)
+# Full suite (144 tests)
 pytest
 
 # With coverage
@@ -513,7 +554,7 @@ src/general_unified_world_model/
 │   ├── canvas.py     # Canvas heatmap (field allocation view)
 │   ├── topology.py   # Domain topology graph
 │   ├── financial.py  # Financial time series charts
-│   ├── geopolitical.py  # Globe risk map
+│   ├── geopolitical.py  # Globe map + rotating GIF
 │   ├── regime.py     # Regime state dashboard
 │   └── social.py     # Social/entity network graph
 ├── llm/              # LLM-powered projection builder
