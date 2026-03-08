@@ -2,7 +2,7 @@
 
 ### A typed causal ontology of civilization, built on [canvas-engineering](https://github.com/JacobFV/canvas-engineering) structured latent spaces.
 
-[![Tests](https://img.shields.io/badge/tests-25%2F25-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-39%2F39-brightgreen.svg)]()
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
