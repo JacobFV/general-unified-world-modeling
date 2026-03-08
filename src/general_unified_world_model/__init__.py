@@ -13,7 +13,7 @@ Quick start:
     bound = project(proj, T=1, H=64, W=64, d_model=64)
 """
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 # Schema
 from general_unified_world_model.schema.world import World
@@ -39,3 +39,13 @@ from general_unified_world_model.training.diffusion import DiffusionWorldModelTr
 
 # Inference
 from general_unified_world_model.inference import WorldModel
+
+# Rendering (lazy — only loaded when accessed, needs matplotlib)
+def render(bound_schema, renderer, **kwargs):
+    from general_unified_world_model.rendering.base import render as _render
+    return _render(bound_schema, renderer, **kwargs)
+
+# LLM projection builder (lazy — only loaded when accessed, needs API key)
+def llm_project(description, **kwargs):
+    from general_unified_world_model.llm.projection_builder import llm_project as _llm_project
+    return _llm_project(description, **kwargs)

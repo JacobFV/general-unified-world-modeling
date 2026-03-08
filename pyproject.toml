@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "general-unified-world-model"
-version = "0.0.1"
+version = "0.0.2"
 description = "General Unified World Model — a typed causal ontology of civilization, built on canvas-engineering structured latent spaces."
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -42,14 +42,18 @@ train = [
     "safetensors>=0.4",
     "bitsandbytes>=0.41",
 ]
+viz = [
+    "matplotlib>=3.7",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "ruff>=0.1",
     "mypy>=1.0",
+    "matplotlib>=3.7",
 ]
 all = [
-    "general-unified-world-model[data,train,dev]",
+    "general-unified-world-model[data,train,dev,viz]",
 ]
 
 [project.urls]

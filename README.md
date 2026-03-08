@@ -4,11 +4,18 @@
 
 [![PyPI](https://img.shields.io/pypi/v/general-unified-world-model.svg)](https://pypi.org/project/general-unified-world-model/)
 [![Tests](https://github.com/JacobFV/general-unified-world-modeling/actions/workflows/ci.yml/badge.svg)](https://github.com/JacobFV/general-unified-world-modeling/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-39%2F39-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-67%2F67-brightgreen.svg)]()
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 > Canvas engineering structures what a diffusion model *thinks in*. This repo declares a **857-field typed schema** spanning planetary physics through individual psychology, compiles it onto a structured latent canvas, and trains it on heterogeneous real-world data — without throwing out samples that are missing fields.
+
+---
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/canvas_full_world.png" width="100%" alt="Full World Model — 857 fields on 128x128 canvas" />
+</p>
+<p align="center"><em>Full World Model — 857 fields allocated on a 128×128 canvas. Each colored region is a semantic domain.</em></p>
 
 ---
 
@@ -297,6 +304,117 @@ regime = predictions["regime.growth_regime"]
 credit_stress = predictions["forecasts.financial.credit_stress_3m"]
 ```
 
+## Visualizations
+
+The rendering system provides multiple views into the same world model state. Install the `viz` extra for rendering support: `pip install general-unified-world-model[viz]`
+
+### Canvas heatmaps
+
+Each field occupies a contiguous region on the (H, W) canvas. Colors indicate semantic domain; intensity shows state magnitude.
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/canvas_macro_projection.png" width="48%" alt="Macro Model Projection" />
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/canvas_hedge_fund.png" width="48%" alt="Hedge Fund Projection" />
+</p>
+<p align="center"><em>Left: Macro model projection (~40 fields on 32×32). Right: Hedge fund projection with AAPL+NVDA (~200 fields on 64×64).</em></p>
+
+### Domain topology graphs
+
+Nodes are semantic domains, edges show attention connectivity between them. Node size ∝ field count, edge width ∝ connection density.
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/topology_macro.png" width="48%" alt="Macro Model Topology" />
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/topology_hedge_fund.png" width="48%" alt="Hedge Fund Model Topology" />
+</p>
+<p align="center"><em>Left: A macroeconomic model's domain graph — macro, rates, credit, and regime are tightly coupled. Right: A hedge fund model adds firm-level nodes and cross-domain positioning.</em></p>
+
+These topology graphs show how different projections create different compute graphs. The macro model has a tight cluster around rates/credit/macro. The hedge fund model fans out to include firm-level nodes (AAPL, NVDA) with edges to financial and macro domains.
+
+### Financial charts
+
+Time series views of world model fields, auto-generated or from real observations.
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/financial_charts.png" width="80%" alt="Financial Charts" />
+</p>
+
+### Geopolitical risk map
+
+Country state projected to RGB on dual orthographic globes. Color gradient: teal (stable) → amber (elevated) → crimson (critical).
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/geopolitical_map.png" width="80%" alt="Geopolitical Risk Map" />
+</p>
+
+### Regime dashboard
+
+Gauge panels for the 12 regime state fields — the compressed world state latent that ties all domains together.
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/regime_dashboard.png" width="80%" alt="Regime Dashboard" />
+</p>
+
+### Social graph (CEO perspective)
+
+First-person view from a key decision-maker. Focal entity centered, concentric rings by connection strength.
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/social_graph_ceo.png" width="80%" alt="CEO Social Graph" />
+</p>
+
+### Rendering API
+
+```python
+from general_unified_world_model import render
+
+# By renderer name
+fig = render(bound, "canvas_heatmap")
+fig = render(bound, "topology_graph")
+fig = render(bound, "financial_chart")
+
+# Save directly
+render(bound, "canvas_heatmap", save_path="output.png")
+
+# Or use renderer classes directly
+from general_unified_world_model.rendering import (
+    CanvasHeatmapRenderer, TopologyGraphRenderer,
+    FinancialChartRenderer, GeopoliticalMapRenderer,
+    RegimeDashboardRenderer, SocialGraphRenderer,
+    RenderContext,
+)
+
+ctx = RenderContext(bound_schema=bound, title="My Model")
+renderer = CanvasHeatmapRenderer()
+fig = renderer.render(ctx)
+renderer.save(ctx, "output.png", dpi=200)
+```
+
+## LLM-powered projection builder
+
+Don't want to manually specify field paths? Describe your modeling needs in plain English and let an LLM design the projection for you.
+
+```python
+from general_unified_world_model import llm_project
+
+result = llm_project(
+    "I'm a hedge fund PM. I need to model US macro, rates, credit, "
+    "and two firms: Apple and NVIDIA. I care about recession risk "
+    "and the Fed's next move.",
+    provider="anthropic",  # or "openai"
+    api_key="sk-ant-...",  # or set ANTHROPIC_API_KEY env var
+)
+
+# Result contains the designed projection + reasoning
+print(result.reasoning)
+# "Hedge fund needs financial markets, US macro, regime indicators..."
+
+# Compile to a BoundSchema
+bound = result.compile(T=1, H=64, W=64, d_model=64)
+print(f"{len(bound.field_names)} fields selected")
+```
+
+Uses raw HTTP calls — no SDK dependencies. Supports both Anthropic and OpenAI providers.
+
 ## Installation
 
 ```bash
@@ -344,7 +462,7 @@ pytest
 ### Running tests
 
 ```bash
-# Full suite (39 tests)
+# Full suite (67 tests)
 pytest
 
 # With coverage
@@ -390,6 +508,16 @@ src/general_unified_world_model/
 │   └── curriculum.py # Multi-phase curriculum
 ├── data/             # Data adapters
 │   └── adapters.py   # FRED, Yahoo, PMI, earnings, news, CSV
+├── rendering/        # Visualization system
+│   ├── base.py       # Renderer protocol, RenderContext, registry
+│   ├── canvas.py     # Canvas heatmap (field allocation view)
+│   ├── topology.py   # Domain topology graph
+│   ├── financial.py  # Financial time series charts
+│   ├── geopolitical.py  # Globe risk map
+│   ├── regime.py     # Regime state dashboard
+│   └── social.py     # Social/entity network graph
+├── llm/              # LLM-powered projection builder
+│   └── projection_builder.py  # Natural language → WorldProjection
 └── inference.py      # Observe/predict API
 ```
 
