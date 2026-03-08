@@ -40,7 +40,10 @@ import torch
 import torch.nn as nn
 
 from general_unified_world_model.projection.subset import WorldProjection, project
-from general_unified_world_model.training.backbone import build_world_model, WorldModelBackbone
+from general_unified_world_model.training.backbone import (
+    build_world_model, WorldModelBackbone,
+    build_cogvideox_world_model, CogVideoXBackbone,
+)
 from general_unified_world_model.training.heterogeneous import (
     FieldEncoder, FieldDecoder, MaskedCanvasTrainer,
     DatasetSpec, InputSpec, OutputSpec, build_mixed_dataloader,
@@ -276,6 +279,8 @@ class DAGCurriculumTrainer:
         device: str = "cpu",
         embed_fn=None,
         embed_dim: int = 16,
+        backbone: str = "cogvideox",
+        pretrained_model_id: str = "THUDM/CogVideoX-2b",
     ):
         """
         Args:
@@ -287,6 +292,9 @@ class DAGCurriculumTrainer:
                 Signature: (texts: list[str]) -> list[list[float]].
                 If None, uses random embeddings (for smoke testing).
             embed_dim: Dimension of embeddings returned by embed_fn.
+            backbone: "cogvideox" (default) to graft onto pretrained CogVideoX,
+                or "scratch" to train a fresh WorldModelBackbone.
+            pretrained_model_id: HuggingFace model ID for CogVideoX.
         """
         self.nodes = {n.name: n for n in nodes}
         self.data_sources = data_sources
@@ -295,10 +303,41 @@ class DAGCurriculumTrainer:
         self.device = device
         self.embed_fn = embed_fn
         self.embed_dim = embed_dim
+        self.backbone_type = backbone
+        self.pretrained_model_id = pretrained_model_id
 
-        # Trained models: name → {backbone, encoder, decoder, bound, conditioner}
+        # Lazy-loaded CogVideoX transformer (shared across all nodes)
+        self._cogvideox_transformer = None
+
+        # Trained models: name → {backbone_state|backbone, encoder, decoder, bound, conditioner}
         self.trained: dict[str, dict] = {}
         self.checkpoints: list[DAGCheckpoint] = []
+
+    def _ensure_cogvideox_loaded(self):
+        """Lazy-load the CogVideoX transformer (once, shared across nodes)."""
+        if self._cogvideox_transformer is not None:
+            return
+
+        try:
+            from diffusers import CogVideoXTransformer3DModel
+        except ImportError:
+            print("WARNING: diffusers not installed — falling back to scratch backbone")
+            print("  Install with: pip install 'general-unified-world-model[cogvideox]'")
+            self.backbone_type = "scratch"
+            return
+
+        print(f"Loading CogVideoX from {self.pretrained_model_id}...")
+        self._cogvideox_transformer = CogVideoXTransformer3DModel.from_pretrained(
+            self.pretrained_model_id,
+            subfolder="transformer",
+            torch_dtype=torch.bfloat16,
+        )
+        self._cogvideox_transformer = self._cogvideox_transformer.to(self.device)
+
+        n_blocks = len(self._cogvideox_transformer.transformer_blocks)
+        n_params = sum(p.numel() for p in self._cogvideox_transformer.parameters())
+        print(f"  Loaded: {n_blocks} blocks, {n_params / 1e9:.1f}B params, "
+              f"device={self.device}")
 
     def _topo_sort(self) -> list[str]:
         """Topologically sort nodes by parent dependencies."""
@@ -347,15 +386,19 @@ class DAGCurriculumTrainer:
     def _merge_backbones(self, parent_names: list[str], target_backbone: nn.Module):
         """Merge parent backbone weights by averaging.
 
-        Only merges parameters that have matching shapes. This handles the
-        case where parents have different canvas sizes but compatible backbones.
+        Only merges parameters that have matching shapes. For CogVideoX backbones,
+        frozen block params are skipped (they're shared and identical).
         """
-        parent_backbones = []
+        parent_state_dicts = []
         for name in parent_names:
-            if name in self.trained and "backbone" in self.trained[name]:
-                parent_backbones.append(self.trained[name]["backbone"])
+            if name not in self.trained:
+                continue
+            if "backbone_state" in self.trained[name]:
+                parent_state_dicts.append(self.trained[name]["backbone_state"])
+            elif "backbone" in self.trained[name]:
+                parent_state_dicts.append(self.trained[name]["backbone"].state_dict())
 
-        if not parent_backbones:
+        if not parent_state_dicts:
             return
 
         target_sd = target_backbone.state_dict()
@@ -363,17 +406,16 @@ class DAGCurriculumTrainer:
 
         for key in target_sd:
             matching = []
-            for pb in parent_backbones:
-                pb_sd = pb.state_dict()
-                if key in pb_sd and pb_sd[key].shape == target_sd[key].shape:
-                    matching.append(pb_sd[key])
+            for psd in parent_state_dicts:
+                if key in psd and psd[key].shape == target_sd[key].shape:
+                    matching.append(psd[key])
 
             if matching:
                 merged_sd[key] = torch.stack(matching).mean(dim=0)
             else:
                 merged_sd[key] = target_sd[key]
 
-        target_backbone.load_state_dict(merged_sd)
+        target_backbone.load_state_dict(merged_sd, strict=False)
 
     def _transfer_encoders(self, parent_names: list[str], encoder: FieldEncoder, decoder: FieldDecoder):
         """Transfer encoder/decoder weights from parents where field names match."""
@@ -422,11 +464,24 @@ class DAGCurriculumTrainer:
         conditioner = self._build_conditioner(bound)
 
         # Build backbone
-        backbone = build_world_model(
-            bound, n_layers=node.n_layers, n_loops=node.n_loops
-        )
-        n_params = sum(p.numel() for p in backbone.parameters())
-        print(f"  Backbone: {n_params:,} params, Conditioner: "
+        if self.backbone_type == "cogvideox":
+            self._ensure_cogvideox_loaded()
+
+        if self.backbone_type == "cogvideox" and self._cogvideox_transformer is not None:
+            backbone = build_cogvideox_world_model(
+                self._cogvideox_transformer, bound, n_loops=node.n_loops,
+            )
+            n_trainable = backbone.trainable_param_count()
+            n_frozen = backbone.frozen_param_count()
+            print(f"  CogVideoX backbone: {n_trainable:,} trainable, "
+                  f"{n_frozen / 1e9:.1f}B frozen")
+        else:
+            backbone = build_world_model(
+                bound, n_layers=node.n_layers, n_loops=node.n_loops
+            )
+            n_trainable = sum(p.numel() for p in backbone.parameters())
+            print(f"  Backbone: {n_trainable:,} params")
+        print(f"  Conditioner: "
               f"{sum(p.numel() for p in conditioner.parameters()):,} params")
 
         # Merge parent weights
@@ -460,12 +515,15 @@ class DAGCurriculumTrainer:
                 bound, sources, batch_size=node.batch_size
             )
 
-            all_params = (
-                list(backbone.parameters())
-                + list(encoder.parameters())
-                + list(decoder.parameters())
-                + list(conditioner.parameters())
-            )
+            all_params = [
+                p for p in backbone.parameters() if p.requires_grad
+            ] + [
+                p for p in encoder.parameters() if p.requires_grad
+            ] + [
+                p for p in decoder.parameters() if p.requires_grad
+            ] + [
+                p for p in conditioner.parameters() if p.requires_grad
+            ]
             optimizer = torch.optim.AdamW(all_params, lr=node.lr, weight_decay=0.01)
 
             trainer = MaskedCanvasTrainer(
@@ -493,10 +551,11 @@ class DAGCurriculumTrainer:
         else:
             print(f"  No data sources — skipping training (untrained init)")
 
-        # Save checkpoint
+        # Save checkpoint (trainable params only for CogVideoX)
         ckpt_path = self.checkpoint_dir / f"{name}.pt"
         torch.save({
             "backbone": backbone.state_dict(),
+            "backbone_type": self.backbone_type,
             "encoder": encoder.state_dict(),
             "decoder": decoder.state_dict(),
             "conditioner": conditioner.state_dict(),
@@ -515,22 +574,33 @@ class DAGCurriculumTrainer:
             timestamp=time.time(),
             loss=last_loss,
             n_fields=n_fields,
-            n_params=n_params,
+            n_params=n_trainable,
             parents=node.parents,
         )
         self.checkpoints.append(ckpt)
 
-        # Store for child nodes
-        self.trained[name] = {
-            "backbone": backbone.cpu(),
-            "encoder": encoder.cpu(),
-            "decoder": decoder.cpu(),
-            "conditioner": conditioner.cpu(),
-            "bound": bound,
-        }
+        # Store for child nodes.
+        # For CogVideoX: store only trainable state dict (frozen blocks are shared).
+        # For scratch: store the full backbone on CPU.
+        if isinstance(backbone, CogVideoXBackbone):
+            self.trained[name] = {
+                "backbone_state": backbone.state_dict(),
+                "encoder": encoder.cpu(),
+                "decoder": decoder.cpu(),
+                "conditioner": conditioner.cpu(),
+                "bound": bound,
+            }
+        else:
+            self.trained[name] = {
+                "backbone": backbone.cpu(),
+                "encoder": encoder.cpu(),
+                "decoder": decoder.cpu(),
+                "conditioner": conditioner.cpu(),
+                "bound": bound,
+            }
 
         print(f"  Saved: {ckpt_path}")
-        return {"loss": last_loss, "n_fields": n_fields, "n_params": n_params}
+        return {"loss": last_loss, "n_fields": n_fields, "n_params": n_trainable}
 
     def run(self, nodes: list[str] | None = None):
         """Run the full DAG curriculum (or a subset of nodes).

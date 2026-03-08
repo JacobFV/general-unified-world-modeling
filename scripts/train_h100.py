@@ -248,6 +248,11 @@ def main():
                         help="Resume from checkpoint directory")
     parser.add_argument("--nodes", type=str, nargs="+", default=None,
                         help="Train specific nodes by name")
+    parser.add_argument("--backbone", type=str, default="cogvideox",
+                        choices=["cogvideox", "scratch"],
+                        help="Backbone type: cogvideox (graft onto pretrained) or scratch")
+    parser.add_argument("--pretrained-model", type=str, default="THUDM/CogVideoX-2b",
+                        help="HuggingFace model ID for CogVideoX backbone")
     args = parser.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -288,6 +293,8 @@ def main():
         data_sources=data_sources,
         checkpoint_dir=args.checkpoint_dir,
         device=device,
+        backbone=args.backbone,
+        pretrained_model_id=args.pretrained_model,
     )
 
     start = time.time()

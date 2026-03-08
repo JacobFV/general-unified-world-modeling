@@ -37,6 +37,12 @@ data = [
     "yfinance>=0.2",
     "requests>=2.28",
 ]
+cogvideox = [
+    "diffusers>=0.30",
+    "transformers>=4.40",
+    "accelerate>=0.30",
+    "safetensors>=0.4",
+]
 train = [
     "accelerate>=0.25",
     "wandb>=0.16",
@@ -65,7 +71,7 @@ dev = [
     "mkdocs-material>=9.0",
 ]
 all = [
-    "general-unified-world-model[data,train,dev,viz,diagrams]",
+    "general-unified-world-model[data,cogvideox,train,dev,viz,diagrams]",
 ]
 
 [project.urls]

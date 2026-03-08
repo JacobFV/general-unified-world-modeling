@@ -1,21 +1,15 @@
 """World Model Backbone: transformer with canvas-structured attention.
 
-The backbone is a standard transformer that operates on the canvas tensor.
-The canvas layout determines which positions attend to which other positions
-via the topology-derived attention mask. The model itself doesn't know about
-modalities — it just sees positions with embeddings and an attention mask.
+The backbone operates on the canvas tensor (B, N, d_model) and produces
+output of the same shape. Two modes:
 
-Two modes:
-1. From scratch: train a small transformer on the canvas
-2. Grafted: take a pretrained diffusion transformer (CogVideoX, etc.)
-   and graft looped attention blocks onto it
+1. CogVideoX grafting (default): load a pretrained CogVideoX diffusion
+   transformer and graft per-block loop embeddings + projection layers
+   onto it. Only ~0.1% of parameters are trainable. This provides rich
+   spatiotemporal priors from video pretraining.
 
-For the world model, we typically train from scratch because:
-- The data is heterogeneous time series, not video
-- We want to control the architecture precisely
-- The canvas positions represent fundamentally different things than video patches
-
-But the grafting path exists for when we want to leverage video priors.
+2. From scratch: train a small custom transformer. Useful for testing,
+   CPU-only environments, or when CogVideoX is unavailable.
 """
 
 from __future__ import annotations
@@ -183,4 +177,165 @@ def build_world_model(
         n_positions=bound_schema.layout.num_positions,
         dropout=dropout,
         n_loops=n_loops,
+    )
+
+
+class CogVideoXBackbone(nn.Module):
+    """World model backbone grafted onto pretrained CogVideoX transformer.
+
+    Loads pretrained CogVideoX transformer blocks and adds:
+    - Projection layers (canvas d_model <-> CogVideoX inner_dim)
+    - Per-block loop embeddings (zero-init for safe grafting)
+    - Per-block gated residuals
+    - Single learned conditioning token for encoder stream
+
+    The frozen blocks provide spatiotemporal priors from video pretraining.
+    Only loop parameters and projections are trainable (~0.1% of total).
+
+    Interface matches WorldModelBackbone: (B, N, d_model) -> (B, N, d_model).
+    """
+
+    def __init__(
+        self,
+        transformer: nn.Module,
+        d_model: int = 64,
+        n_positions: int = 8192,
+        n_loops: int = 3,
+        dropout: float = 0.1,
+    ):
+        super().__init__()
+        from canvas_engineering.cogvideox import detect_inner_dim
+        self.inner_dim = detect_inner_dim(transformer)
+
+        # Store blocks as plain list — NOT nn.Module children.
+        # This keeps state_dict() clean (only trainable params) and avoids
+        # moving shared frozen blocks when individual backbones move to CPU.
+        self._frozen_blocks = list(transformer.transformer_blocks)
+        n_blocks = len(self._frozen_blocks)
+
+        for block in self._frozen_blocks:
+            for p in block.parameters():
+                p.requires_grad = False
+
+        # Precompute temb from timestep 0 (neutral adaptive-norm conditioning)
+        try:
+            with torch.no_grad():
+                device = next(transformer.parameters()).device
+                dtype = next(transformer.parameters()).dtype
+                t = torch.zeros(1, dtype=torch.long, device=device)
+                t_proj = transformer.time_proj(t)
+                base_temb = transformer.time_embedding(t_proj.to(dtype))
+            self.register_buffer('_base_temb', base_temb.cpu())
+        except (AttributeError, RuntimeError):
+            block = self._frozen_blocks[0]
+            if hasattr(block, 'scale_shift_table'):
+                temb_dim = block.scale_shift_table.numel()
+            else:
+                temb_dim = 6 * self.inner_dim
+            self.register_buffer('_base_temb', torch.zeros(1, temb_dim))
+
+        # Canvas positional encoding
+        self.pos_enc = SinusoidalPositionalEncoding(d_model, max_len=n_positions)
+
+        # Project canvas d_model <-> CogVideoX inner_dim
+        self.proj_in = nn.Sequential(
+            nn.Linear(d_model, self.inner_dim),
+            nn.LayerNorm(self.inner_dim),
+        )
+        self.proj_out = nn.Linear(self.inner_dim, d_model)
+        self.final_norm = nn.LayerNorm(d_model)
+
+        # Single learned conditioning token for the encoder stream.
+        # CogVideoXBlock does joint attention over [encoder; hidden] and splits back,
+        # so this token acts as a learnable global context for all canvas positions.
+        self.encoder_cond = nn.Parameter(torch.randn(1, 1, self.inner_dim) * 0.02)
+
+        # Per-block, per-loop trainable parameters (zero-init = identity at start)
+        self.n_loops = n_loops
+        self.loop_embs = nn.ParameterList([
+            nn.Parameter(torch.zeros(n_loops, self.inner_dim))
+            for _ in range(n_blocks)
+        ])
+        self.loop_embs_enc = nn.ParameterList([
+            nn.Parameter(torch.zeros(n_loops, self.inner_dim))
+            for _ in range(n_blocks)
+        ])
+        self.loop_gates = nn.ParameterList([
+            nn.Parameter(torch.zeros(n_loops, 1))
+            for _ in range(n_blocks)
+        ])
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """
+        Args:
+            x: (B, N, d_model) canvas tensor.
+            mask: Unused — CogVideoX blocks use full attention.
+                Accepted for API compatibility with WorldModelBackbone.
+
+        Returns:
+            (B, N, d_model) output tensor.
+        """
+        B, N, _ = x.shape
+
+        x = self.pos_enc(x)
+        h = self.proj_in(x)  # (B, N, inner_dim)
+        e = self.encoder_cond.expand(B, -1, -1)  # (B, 1, inner_dim)
+        temb = self._base_temb.expand(B, -1)
+
+        # Determine block dtype for mixed-precision casting
+        block_dtype = next(self._frozen_blocks[0].parameters()).dtype
+
+        for i, block in enumerate(self._frozen_blocks):
+            h_in, e_in = h, e
+
+            for l in range(self.n_loops):
+                h_input = (h_in + self.loop_embs[i][l]).to(block_dtype)
+                e_input = (e_in + self.loop_embs_enc[i][l]).to(block_dtype)
+                h_out, e_out = block(
+                    h_input, e_input, temb.to(block_dtype),
+                )
+                h_out, e_out = h_out.float(), e_out.float()
+
+                gate = torch.sigmoid(self.loop_gates[i][l])
+                h_in = gate * h_out + (1 - gate) * h_in
+                e_in = gate * e_out + (1 - gate) * e_in
+
+            h, e = h_in, e_in
+
+        return self.final_norm(self.proj_out(h))
+
+    def frozen_param_count(self) -> int:
+        return sum(p.numel() for b in self._frozen_blocks for p in b.parameters())
+
+    def trainable_param_count(self) -> int:
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+
+def build_cogvideox_world_model(
+    transformer: nn.Module,
+    bound_schema,
+    n_loops: int = 3,
+    dropout: float = 0.1,
+) -> CogVideoXBackbone:
+    """Build a CogVideoXBackbone sized for a compiled schema.
+
+    Args:
+        transformer: Pretrained CogVideoX transformer (kept on its current device).
+        bound_schema: BoundSchema from compile_schema / project().
+        n_loops: Looped attention iterations.
+        dropout: Dropout rate.
+
+    Returns:
+        CogVideoXBackbone with trainable loop params and projections.
+    """
+    return CogVideoXBackbone(
+        transformer=transformer,
+        d_model=bound_schema.layout.d_model,
+        n_positions=bound_schema.layout.num_positions,
+        n_loops=n_loops,
+        dropout=dropout,
     )
