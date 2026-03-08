@@ -7,7 +7,7 @@ from general_unified_world_model.data.adapters import (
     z_score, minmax, log_return, pct_change, rank_normalize,
     pmi_adapter, earnings_adapter, news_adapter,
 )
-from general_unified_world_model.training.heterogeneous import DatasetSpec, FieldMapping
+from general_unified_world_model.training.heterogeneous import DatasetSpec, InputSpec, OutputSpec
 
 
 def test_z_score_transform():
@@ -62,7 +62,7 @@ def test_pmi_adapter():
     }
     spec, result_data = pmi_adapter(data, country="us")
     assert isinstance(spec, DatasetSpec)
-    assert len(spec.mappings) >= 2
+    assert len(spec.input_specs) >= 2
     assert spec.base_period == 192
 
 
@@ -74,8 +74,8 @@ def test_earnings_adapter():
     }
     spec, result_data = earnings_adapter("AAPL", data)
     assert isinstance(spec, DatasetSpec)
-    assert len(spec.mappings) >= 2
-    assert "firm_AAPL" in spec.mappings[0].target_field
+    assert len(spec.input_specs) >= 2
+    assert "firm_AAPL" in spec.input_specs[0].field_path
 
 
 def test_news_adapter():
@@ -83,5 +83,5 @@ def test_news_adapter():
     embeddings = torch.randn(100, 32)
     spec, data = news_adapter(embeddings)
     assert isinstance(spec, DatasetSpec)
-    assert len(spec.mappings) == 1
-    assert "events.news_embedding" in spec.mappings[0].target_field
+    assert len(spec.input_specs) == 1
+    assert "events.news_embedding" in spec.input_specs[0].field_path

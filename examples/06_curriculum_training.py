@@ -15,7 +15,7 @@ from general_unified_world_model.training.curriculum import (
     CurriculumConfig, CurriculumTrainer, PhaseConfig,
     DomainSpec, STANDARD_DOMAINS,
 )
-from general_unified_world_model.training.heterogeneous import DatasetSpec, FieldMapping
+from general_unified_world_model.training.heterogeneous import DatasetSpec, InputSpec, OutputSpec
 
 
 def generate_synthetic_sources():
@@ -33,17 +33,28 @@ def generate_synthetic_sources():
         "hy_spread": (torch.randn(n) * 0.02).abs() + 0.04,
         "dxy": torch.cumsum(torch.randn(n) * 0.002, dim=0) + 4.6,
     }
+    financial_input_specs = [
+        InputSpec(key="sp500", semantic_type="financial > equities > broad indices", field_path="financial.equities.broad_indices"),
+        InputSpec(key="vix", semantic_type="financial > equities > vix", field_path="financial.equities.vix"),
+        InputSpec(key="ust_10y", semantic_type="financial > yield curves > ten year", field_path="financial.yield_curves.ten_year"),
+        InputSpec(key="ust_2y", semantic_type="financial > yield curves > two year", field_path="financial.yield_curves.two_year"),
+        InputSpec(key="ig_spread", semantic_type="financial > credit > ig spread", field_path="financial.credit.ig_spread"),
+        InputSpec(key="hy_spread", semantic_type="financial > credit > hy spread", field_path="financial.credit.hy_spread"),
+        InputSpec(key="dxy", semantic_type="financial > fx > dxy", field_path="financial.fx.dxy"),
+    ]
+    financial_output_specs = [
+        OutputSpec(key="sp500", semantic_type="financial > equities > broad indices", field_path="financial.equities.broad_indices"),
+        OutputSpec(key="vix", semantic_type="financial > equities > vix", field_path="financial.equities.vix"),
+        OutputSpec(key="ust_10y", semantic_type="financial > yield curves > ten year", field_path="financial.yield_curves.ten_year"),
+        OutputSpec(key="ust_2y", semantic_type="financial > yield curves > two year", field_path="financial.yield_curves.two_year"),
+        OutputSpec(key="ig_spread", semantic_type="financial > credit > ig spread", field_path="financial.credit.ig_spread"),
+        OutputSpec(key="hy_spread", semantic_type="financial > credit > hy spread", field_path="financial.credit.hy_spread"),
+        OutputSpec(key="dxy", semantic_type="financial > fx > dxy", field_path="financial.fx.dxy"),
+    ]
     financial_spec = DatasetSpec(
         name="yahoo_finance",
-        mappings=[
-            FieldMapping("sp500", "financial.equities.broad_indices"),
-            FieldMapping("vix", "financial.equities.vix"),
-            FieldMapping("ust_10y", "financial.yield_curves.ten_year"),
-            FieldMapping("ust_2y", "financial.yield_curves.two_year"),
-            FieldMapping("ig_spread", "financial.credit.ig_spread"),
-            FieldMapping("hy_spread", "financial.credit.hy_spread"),
-            FieldMapping("dxy", "financial.fx.dxy"),
-        ],
+        input_specs=financial_input_specs,
+        output_specs=financial_output_specs,
     )
     sources["yahoo_finance"] = (financial_spec, financial_data)
 
@@ -52,12 +63,18 @@ def generate_synthetic_sources():
         "ffr": torch.cumsum(torch.randn(n) * 0.002, dim=0) + 0.05,
         "t10y2y": torch.randn(n) * 0.005 + 0.01,
     }
+    fred_rates_input_specs = [
+        InputSpec(key="ffr", semantic_type="financial > central banks > policy rate", field_path="financial.central_banks.policy_rate"),
+        InputSpec(key="t10y2y", semantic_type="financial > yield curves > slope 2s10s", field_path="financial.yield_curves.slope_2s10s"),
+    ]
+    fred_rates_output_specs = [
+        OutputSpec(key="ffr", semantic_type="financial > central banks > policy rate", field_path="financial.central_banks.policy_rate"),
+        OutputSpec(key="t10y2y", semantic_type="financial > yield curves > slope 2s10s", field_path="financial.yield_curves.slope_2s10s"),
+    ]
     fred_rates_spec = DatasetSpec(
         name="fred_rates",
-        mappings=[
-            FieldMapping("ffr", "financial.central_banks.policy_rate"),
-            FieldMapping("t10y2y", "financial.yield_curves.slope_2s10s"),
-        ],
+        input_specs=fred_rates_input_specs,
+        output_specs=fred_rates_output_specs,
     )
     sources["fred_rates"] = (fred_rates_spec, fred_rates_data)
 
@@ -68,14 +85,22 @@ def generate_synthetic_sources():
         "unrate": (torch.randn(n // 192) * 0.005).abs() + 0.04,
         "pmi": torch.randn(n // 192) * 2.0 + 52.0,
     }
+    macro_input_specs = [
+        InputSpec(key="gdp", semantic_type="country us > macro > output > gdp nowcast", field_path="country_us.macro.output.gdp_nowcast"),
+        InputSpec(key="cpi", semantic_type="country us > macro > inflation > headline cpi", field_path="country_us.macro.inflation.headline_cpi"),
+        InputSpec(key="unrate", semantic_type="country us > macro > labor > unemployment rate", field_path="country_us.macro.labor.unemployment_rate"),
+        InputSpec(key="pmi", semantic_type="country us > macro > output > pmi manufacturing", field_path="country_us.macro.output.pmi_manufacturing"),
+    ]
+    macro_output_specs = [
+        OutputSpec(key="gdp", semantic_type="country us > macro > output > gdp nowcast", field_path="country_us.macro.output.gdp_nowcast"),
+        OutputSpec(key="cpi", semantic_type="country us > macro > inflation > headline cpi", field_path="country_us.macro.inflation.headline_cpi"),
+        OutputSpec(key="unrate", semantic_type="country us > macro > labor > unemployment rate", field_path="country_us.macro.labor.unemployment_rate"),
+        OutputSpec(key="pmi", semantic_type="country us > macro > output > pmi manufacturing", field_path="country_us.macro.output.pmi_manufacturing"),
+    ]
     macro_spec = DatasetSpec(
         name="fred_macro",
-        mappings=[
-            FieldMapping("gdp", "country_us.macro.output.gdp_nowcast"),
-            FieldMapping("cpi", "country_us.macro.inflation.headline_cpi"),
-            FieldMapping("unrate", "country_us.macro.labor.unemployment_rate"),
-            FieldMapping("pmi", "country_us.macro.output.pmi_manufacturing"),
-        ],
+        input_specs=macro_input_specs,
+        output_specs=macro_output_specs,
         base_period=192,
     )
     sources["fred_macro"] = (macro_spec, macro_data)
@@ -84,11 +109,16 @@ def generate_synthetic_sources():
     news_data = {
         "news_emb": torch.randn(n, 32),  # pre-computed embeddings
     }
+    news_input_specs = [
+        InputSpec(key="news_emb", semantic_type="events > news embedding", field_path="events.news_embedding"),
+    ]
+    news_output_specs = [
+        OutputSpec(key="news_emb", semantic_type="events > news embedding", field_path="events.news_embedding"),
+    ]
     news_spec = DatasetSpec(
         name="news_embeddings",
-        mappings=[
-            FieldMapping("news_emb", "events.news_embedding"),
-        ],
+        input_specs=news_input_specs,
+        output_specs=news_output_specs,
     )
     sources["news_embeddings"] = (news_spec, news_data)
 

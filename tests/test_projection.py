@@ -8,6 +8,7 @@ from general_unified_world_model.projection.subset import WorldProjection, proje
 from general_unified_world_model.projection.temporal import TemporalTopology, TemporalEntity
 from general_unified_world_model.schema.business import Business
 from general_unified_world_model.schema.individual import Individual
+from general_unified_world_model.schema.country import Country
 
 
 def test_full_projection():
@@ -32,7 +33,11 @@ def test_dynamic_firms():
     """Adding firms should create new Business fields."""
     proj = WorldProjection(
         include=["regime"],
-        firms=["AAPL", "NVDA", "TSMC"],
+        entities={
+            "firm_AAPL": Business(),
+            "firm_NVDA": Business(),
+            "firm_TSMC": Business(),
+        },
     )
     bound = project(proj, T=1, H=64, W=64, d_model=64)
 
@@ -48,7 +53,10 @@ def test_dynamic_individuals():
     """Adding individuals should create new Individual fields."""
     proj = WorldProjection(
         include=["regime"],
-        individuals=["ceo", "cfo"],
+        entities={
+            "person_ceo": Individual(),
+            "person_cfo": Individual(),
+        },
     )
     bound = project(proj, T=1, H=48, W=48, d_model=64)
 
@@ -60,7 +68,10 @@ def test_dynamic_countries():
     """Adding countries should create new Country fields."""
     proj = WorldProjection(
         include=["regime"],
-        countries=["jp", "kr"],
+        entities={
+            "country_jp": Country(),
+            "country_kr": Country(),
+        },
     )
     bound = project(proj, T=1, H=64, W=64, d_model=64)
 

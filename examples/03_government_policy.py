@@ -10,6 +10,7 @@ Run: python examples/03_government_policy.py
 
 from canvas_engineering import ConnectivityPolicy
 from general_unified_world_model.projection.subset import WorldProjection, project
+from general_unified_world_model.schema.country import Country
 
 # Government analyst's specification
 proj = WorldProjection(
@@ -47,12 +48,12 @@ proj = WorldProjection(
         "narratives.public.institutional_trust",
     ],
 
-    # No firms or individuals needed for macro policy analysis
-    firms=[],
-    individuals=[],
-
     # Add extra countries for trade analysis
-    countries=["jp", "uk", "in"],
+    entities={
+        "country_jp": Country(),
+        "country_uk": Country(),
+        "country_in": Country(),
+    },
 
     connectivity=ConnectivityPolicy(
         intra="dense",

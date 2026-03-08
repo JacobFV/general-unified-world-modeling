@@ -8,7 +8,7 @@ from general_unified_world_model.projection.subset import WorldProjection, proje
 from general_unified_world_model.training.backbone import WorldModelBackbone, build_world_model
 from general_unified_world_model.training.heterogeneous import (
     FieldEncoder, FieldDecoder, MaskedCanvasTrainer,
-    DatasetSpec, FieldMapping, HeterogeneousDataset,
+    DatasetSpec, InputSpec, OutputSpec, HeterogeneousDataset,
     build_mixed_dataloader,
 )
 from general_unified_world_model.training.diffusion import (
@@ -91,16 +91,22 @@ def test_heterogeneous_dataset(small_bound):
     # Create two data sources with different field coverage
     spec1 = DatasetSpec(
         name="source1",
-        mappings=[
-            FieldMapping("val_a", small_bound.field_names[0]),
+        input_specs=[
+            InputSpec(key="val_a", semantic_type="field path", field_path=small_bound.field_names[0]),
+        ],
+        output_specs=[
+            OutputSpec(key="val_a", semantic_type="field path", field_path=small_bound.field_names[0]),
         ],
     )
     data1 = {"val_a": torch.randn(100)}
 
     spec2 = DatasetSpec(
         name="source2",
-        mappings=[
-            FieldMapping("val_b", small_bound.field_names[1]),
+        input_specs=[
+            InputSpec(key="val_b", semantic_type="field path", field_path=small_bound.field_names[1]),
+        ],
+        output_specs=[
+            OutputSpec(key="val_b", semantic_type="field path", field_path=small_bound.field_names[1]),
         ],
     )
     data2 = {"val_b": torch.randn(100)}

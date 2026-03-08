@@ -104,7 +104,7 @@ class TestSyntheticCollector:
 
         assert isinstance(spec, DatasetSpec)
         assert spec.name == "Synthetic"
-        assert len(spec.mappings) > 0
+        assert len(spec.input_specs) > 0
         assert len(data) > 0
 
         # Check a few expected fields
@@ -142,8 +142,8 @@ class TestSyntheticCollector:
         """Every mapping should point to a key in the data dict."""
         collector = SyntheticCollector(n_timesteps=20, force_refresh=True, cache_dir=tempfile.mkdtemp())
         spec, data = collector.collect()
-        for mapping in spec.mappings:
-            assert mapping.source_key in data, f"Mapping {mapping.source_key} not in data"
+        for mapping in spec.input_specs:
+            assert mapping.key in data, f"Mapping {mapping.key} not in data"
 
 
 # ── FRED Collector (unit tests, no API) ────────────────────────────────────

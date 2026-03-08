@@ -39,10 +39,15 @@ def full_ctx():
 
 @pytest.fixture
 def ceo_ctx():
+    from general_unified_world_model.schema.business import Business
+    from general_unified_world_model.schema.individual import Individual
     proj = WorldProjection(
         include=["country_us.macro", "sector_tech", "financial.equities", "regime", "forecasts"],
-        firms=["ACME"],
-        individuals=["ceo", "cfo"],
+        entities={
+            "firm_ACME": Business(),
+            "person_ceo": Individual(),
+            "person_cfo": Individual(),
+        },
     )
     bound = project(proj, T=1, H=48, W=48, d_model=32)
     return RenderContext(bound_schema=bound)

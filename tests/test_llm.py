@@ -43,7 +43,7 @@ class TestSchemaIntrospection:
         desc = _build_schema_description()
         assert "financial" in desc
         assert "regime" in desc
-        assert "firms" in desc
+        assert "Business" in desc
         assert len(desc) > 500  # Should be a substantial description
 
 
@@ -51,7 +51,7 @@ class TestParseResponse:
     def test_parses_clean_json(self):
         text = json.dumps({
             "include": ["financial", "regime"],
-            "firms": ["AAPL"],
+            "entities": {"firm_AAPL": "Business"},
             "reasoning": "test",
         })
         result = _parse_llm_response(text)
@@ -104,11 +104,7 @@ HEDGE_FUND_RESPONSE = {
         "forecasts.financial",
     ],
     "exclude": [],
-    "firms": ["AAPL", "NVDA"],
-    "individuals": [],
-    "countries": [],
-    "sectors": [],
-    "supply_chains": [],
+    "entities": {"firm_AAPL": "Business", "firm_NVDA": "Business"},
     "reasoning": "Hedge fund needs financial markets, US macro, and forecasts.",
 }
 
@@ -121,11 +117,7 @@ CEO_RESPONSE = {
         "forecasts",
     ],
     "exclude": [],
-    "firms": ["ACME"],
-    "individuals": ["ceo", "cfo"],
-    "countries": [],
-    "sectors": [],
-    "supply_chains": [],
+    "entities": {"firm_ACME": "Business", "person_ceo": "Individual", "person_cfo": "Individual"},
     "reasoning": "CEO needs company context, sector, and macro outlook.",
 }
 
@@ -140,11 +132,7 @@ GEOPOLITICAL_RESPONSE = {
         "trust",
     ],
     "exclude": [],
-    "firms": [],
-    "individuals": ["fed_chair"],
-    "countries": ["jp", "uk"],
-    "sectors": [],
-    "supply_chains": [],
+    "entities": {"person_fed_chair": "Individual", "country_jp": "Country", "country_uk": "Country"},
     "reasoning": "Geopolitical analyst needs multi-country view.",
 }
 
@@ -188,7 +176,7 @@ class TestMockedAnthropicCalls:
             api_key="sk-ant-test-key",
         )
 
-        assert "ACME" in result.projection.firms
+        assert "firm_ACME" in result.projection.entities
         assert any("regime" in p for p in result.projection.include)
 
     @patch("urllib.request.urlopen")

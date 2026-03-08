@@ -1,12 +1,11 @@
 # General Unified World Model — Training Curriculum
 #
-# This YAML file specifies the full training DAG as a sequence of stages.
-# Each stage forks into parallel subjects (trained simultaneously),
-# then joins (weight averaging) before the next stage.
+# This YAML file specifies the full training DAG as a sequence of stage groups.
+# Each group forks into parallel stages (trained simultaneously),
+# then joins (weight averaging) before the next group.
 #
-# Subjects are specified in natural language. The system resolves
-# them to world model field paths via keyword matching. You can also
-# provide explicit `include` paths to override the NL resolution.
+# Each stage describes what to train. Stages can provide explicit
+# `include` paths for the world model fields to include on the canvas.
 #
 # Usage:
 #   from general_unified_world_model.training.dag_curriculum import (
@@ -29,71 +28,69 @@ defaults:
   lr: 0.0001
   batch_size: 32
 
-stages:
-  # ── Stage 1: Foundations ──────────────────────────────────────────
+plan:
+  # ── Group 1: Foundations ──────────────────────────────────────────
   # Six parallel foundation models, each learning one domain.
   # No parent weights — these start from random initialization.
   - name: foundations
-    parallel:
-      - subject: "Core financial markets: yield curves, credit spreads, equity indices, FX, derivatives pricing"
+    stages:
+      - description: "Core financial markets: yield curves, credit spreads, equity indices, FX, derivatives pricing"
         datasets: [yahoo_finance, fred_rates]
 
-      - subject: "US macroeconomic fundamentals: GDP, inflation, employment, housing, fiscal policy"
+      - description: "US macroeconomic fundamentals: GDP, inflation, employment, housing, fiscal policy"
         datasets: [fred_macro]
 
-      - subject: "Political systems, governance, and geopolitical dynamics"
+      - description: "Political systems, governance, and geopolitical dynamics"
 
-      - subject: "Natural resources, energy markets, and commodity supply chains"
+      - description: "Natural resources, energy markets, and commodity supply chains"
         datasets: [yahoo_commodities]
 
-      - subject: "Technology frontier: AI capabilities, semiconductor production, biotech advances"
+      - description: "Technology frontier: AI capabilities, semiconductor production, biotech advances"
 
-      - subject: "Media narratives, investor positioning, and public sentiment"
+      - description: "Media narratives, investor positioning, and public sentiment"
         datasets: [news_embeddings]
 
-  # ── Stage 2: Cross-Domain ────────────────────────────────────────
+  # ── Group 2: Cross-Domain ────────────────────────────────────────
   # Three parallel models that combine foundation domains.
   # Each starts from the merged weights of all foundation models.
   - name: cross_domain
     builds_on: foundations
-    parallel:
-      - subject: "How macroeconomic conditions drive financial markets: GDP growth affects equities, inflation moves rates, employment drives credit"
+    stages:
+      - description: "How macroeconomic conditions drive financial markets: GDP growth affects equities, inflation moves rates, employment drives credit"
         datasets: [fred_macro, fred_rates, yahoo_finance]
         n_layers: 8
         H: 64
         W: 64
 
-      - subject: "Geopolitical events driving commodity prices: sanctions on oil, trade wars on metals, conflict on food"
+      - description: "Geopolitical events driving commodity prices: sanctions on oil, trade wars on metals, conflict on food"
         datasets: [yahoo_commodities]
 
-      - subject: "How media narratives and sentiment drive market dynamics: media tone to equity flows, positioning to volatility"
+      - description: "How media narratives and sentiment drive market dynamics: media tone to equity flows, positioning to volatility"
         datasets: [yahoo_finance, news_embeddings]
 
-  # ── Stage 3: Complex Dynamics ────────────────────────────────────
+  # ── Group 3: Complex Dynamics ────────────────────────────────────
   # Two parallel models for higher-order dynamics.
   - name: complex_dynamics
     builds_on: cross_domain
-    parallel:
-      - subject: "Corporate strategy and decision-making in macroeconomic context"
-        firms: [AAPL, NVDA, MSFT]
+    stages:
+      - description: "Corporate strategy and decision-making in macroeconomic context"
         datasets: [yahoo_finance, fred_macro]
         n_layers: 8
         H: 64
         W: 64
 
-      - subject: "Policy analysis: monetary policy transmission, fiscal stimulus multipliers, regulatory impact on markets"
-        countries: [jp, uk]
+      - description: "Policy analysis: monetary policy transmission, fiscal stimulus multipliers, regulatory impact on markets"
         datasets: [fred_macro, fred_rates, yahoo_finance]
         n_layers: 8
         H: 64
         W: 64
 
-  # ── Stage 4: Full Integration ────────────────────────────────────
+  # ── Group 4: Full Integration ────────────────────────────────────
   # Single model that brings everything together.
   - name: integration
     builds_on: complex_dynamics
-    parallel:
-      - subject: "Full world model integration: all domains on one canvas"
+    stages:
+      - description: "Full world model integration: all domains on one canvas"
         include: ["*"]
         datasets: [yahoo_finance, fred_macro, fred_rates, yahoo_commodities]
         n_layers: 12

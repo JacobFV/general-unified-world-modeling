@@ -10,7 +10,7 @@ import torch
 from general_unified_world_model.projection.subset import WorldProjection, project
 from general_unified_world_model.training.backbone import build_world_model
 from general_unified_world_model.training.heterogeneous import (
-    DatasetSpec, FieldMapping, FieldEncoder, FieldDecoder,
+    DatasetSpec, InputSpec, OutputSpec, FieldEncoder, FieldDecoder,
 )
 from general_unified_world_model.training.dag_curriculum import (
     TrainingNode, DAGCurriculumTrainer, DAGCheckpoint,
@@ -31,7 +31,7 @@ class TestTrainingNode:
         assert node.H is None  # auto-sized by project()
         assert node.d_model == 64
         assert node.n_steps == 5000
-        assert node.firms == []
+        assert node.entities == {}
         assert node.data_sources == []
 
     def test_with_parents(self):
@@ -41,6 +41,14 @@ class TestTrainingNode:
             parents=["parent_a", "parent_b"],
         )
         assert node.parents == ["parent_a", "parent_b"]
+
+    def test_with_entities(self):
+        node = TrainingNode(
+            name="corp", description="Corporate",
+            include=["financial.equities", "regime"],
+            entities={"firm_AAPL": "Business", "country_jp": "Country"},
+        )
+        assert node.entities == {"firm_AAPL": "Business", "country_jp": "Country"}
 
 
 # ── Standard DAG definitions ──────────────────────────────────────────────
@@ -60,6 +68,11 @@ class TestStandardDAG:
     def test_tier_2_has_parents(self):
         for node in TIER_2_COMPLEX:
             assert len(node.parents) >= 1
+
+    def test_tier_2_has_entities(self):
+        corp = next(n for n in TIER_2_COMPLEX if n.name == "corporate_strategy")
+        assert "firm_AAPL" in corp.entities
+        assert corp.entities["firm_AAPL"] == "Business"
 
     def test_tier_3_full_integration(self):
         assert len(TIER_3_INTEGRATION) == 1
@@ -251,11 +264,13 @@ class TestEndToEndTraining:
 
         spec_a = DatasetSpec(
             name="synth_a",
-            mappings=[FieldMapping("ten_year", "financial.yield_curves.ten_year")],
+            input_specs=[InputSpec(key="ten_year", semantic_type="10-year yield", field_path="financial.yield_curves.ten_year")],
+            output_specs=[OutputSpec(key="ten_year", semantic_type="10-year yield", field_path="financial.yield_curves.ten_year")],
         )
         spec_b = DatasetSpec(
             name="synth_b",
-            mappings=[FieldMapping("regime_val", "regime.growth_regime")],
+            input_specs=[InputSpec(key="regime_val", semantic_type="growth regime", field_path="regime.growth_regime")],
+            output_specs=[OutputSpec(key="regime_val", semantic_type="growth regime", field_path="regime.growth_regime")],
         )
 
         data_sources = {

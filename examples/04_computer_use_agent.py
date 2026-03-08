@@ -11,6 +11,8 @@ Run: python examples/04_computer_use_agent.py
 
 from canvas_engineering import ConnectivityPolicy
 from general_unified_world_model.projection.subset import WorldProjection, project
+from general_unified_world_model.schema.individual import Individual
+from general_unified_world_model.schema.business import Business
 
 # Computer use agent's world model
 proj = WorldProjection(
@@ -31,11 +33,11 @@ proj = WorldProjection(
         "forecasts.financial.credit_stress_3m",
     ],
 
-    # The user as an Individual
-    individuals=["user"],
-
-    # The user's organization
-    firms=["user_org"],
+    # The user and their organization
+    entities={
+        "person_user": Individual(),
+        "firm_user_org": Business(),
+    },
 
     connectivity=ConnectivityPolicy(
         intra="dense",

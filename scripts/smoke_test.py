@@ -26,7 +26,7 @@ from general_unified_world_model import WorldProjection, project, World
 from general_unified_world_model.training.backbone import build_world_model
 from general_unified_world_model.training.heterogeneous import (
     FieldEncoder, FieldDecoder, MaskedCanvasTrainer,
-    DatasetSpec, FieldMapping, build_mixed_dataloader,
+    DatasetSpec, InputSpec, OutputSpec, build_mixed_dataloader,
 )
 from general_unified_world_model.training.diffusion import (
     DiffusionWorldModelTrainer, CosineNoiseSchedule,
@@ -133,9 +133,13 @@ def test_heterogeneous_training():
     # Create synthetic data
     spec = DatasetSpec(
         name="synthetic",
-        mappings=[
-            FieldMapping("ten_year", "financial.yield_curves.ten_year"),
-            FieldMapping("two_year", "financial.yield_curves.two_year"),
+        input_specs=[
+            InputSpec(key="ten_year", semantic_type="financial > yield curves > ten year", field_path="financial.yield_curves.ten_year"),
+            InputSpec(key="two_year", semantic_type="financial > yield curves > two year", field_path="financial.yield_curves.two_year"),
+        ],
+        output_specs=[
+            OutputSpec(key="ten_year", semantic_type="financial > yield curves > ten year", field_path="financial.yield_curves.ten_year"),
+            OutputSpec(key="two_year", semantic_type="financial > yield curves > two year", field_path="financial.yield_curves.two_year"),
         ],
     )
     data = {
@@ -230,14 +234,20 @@ def test_dag_curriculum():
     # Synthetic data sources
     finance_spec = DatasetSpec(
         name="synthetic_finance",
-        mappings=[
-            FieldMapping("ten_year", "financial.yield_curves.ten_year"),
+        input_specs=[
+            InputSpec(key="ten_year", semantic_type="financial > yield curves > ten year", field_path="financial.yield_curves.ten_year"),
+        ],
+        output_specs=[
+            OutputSpec(key="ten_year", semantic_type="financial > yield curves > ten year", field_path="financial.yield_curves.ten_year"),
         ],
     )
     macro_spec = DatasetSpec(
         name="synthetic_macro",
-        mappings=[
-            FieldMapping("regime_val", "regime.growth_regime"),
+        input_specs=[
+            InputSpec(key="regime_val", semantic_type="regime > growth regime", field_path="regime.growth_regime"),
+        ],
+        output_specs=[
+            OutputSpec(key="regime_val", semantic_type="regime > growth regime", field_path="regime.growth_regime"),
         ],
     )
 

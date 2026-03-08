@@ -54,7 +54,7 @@ def main():
         print("Fetching FRED data...")
         fred_spec, fred_data = fred_adapter(start_date="2010-01-01")
         sources.append((fred_spec, fred_data))
-        print(f"  FRED: {len(fred_spec.mappings)} series")
+        print(f"  FRED: {len(fred_spec.input_specs)} series")
     else:
         print("FRED_API_KEY not set, generating synthetic data")
         sources.append(_synthetic_macro_source(bound))
@@ -70,7 +70,7 @@ def main():
             include_crypto=True,
         )
         sources.append((yahoo_spec, yahoo_data))
-        print(f"  Yahoo: {len(yahoo_spec.mappings)} tickers")
+        print(f"  Yahoo: {len(yahoo_spec.input_specs)} tickers")
     except ImportError:
         print("yfinance not installed, using synthetic data")
         sources.append(_synthetic_market_source(bound))
@@ -120,44 +120,60 @@ def main():
 
 def _synthetic_macro_source(bound):
     """Generate synthetic macro data for testing."""
-    from general_unified_world_model.training.heterogeneous import DatasetSpec, FieldMapping
+    from general_unified_world_model.training.heterogeneous import DatasetSpec, InputSpec, OutputSpec
 
     n_rows = 1000
     data = {}
-    mappings = []
+    input_specs = []
+    output_specs = []
 
     # Generate some synthetic series
     for field_name in bound.field_names:
         if "macro" in field_name or "financial" in field_name:
             key = f"synth_{field_name}"
             data[key] = torch.randn(n_rows)
-            mappings.append(FieldMapping(
-                source_key=key,
-                target_field=field_name,
+            semantic = field_name.replace("_", " ").replace(".", " > ")
+            input_specs.append(InputSpec(
+                key=key,
+                semantic_type=semantic,
+                field_path=field_name,
+            ))
+            output_specs.append(OutputSpec(
+                key=key,
+                semantic_type=semantic,
+                field_path=field_name,
             ))
 
-    spec = DatasetSpec(name="Synthetic Macro", mappings=mappings)
+    spec = DatasetSpec(name="Synthetic Macro", input_specs=input_specs, output_specs=output_specs)
     return spec, data
 
 
 def _synthetic_market_source(bound):
     """Generate synthetic market data for testing."""
-    from general_unified_world_model.training.heterogeneous import DatasetSpec, FieldMapping
+    from general_unified_world_model.training.heterogeneous import DatasetSpec, InputSpec, OutputSpec
 
     n_rows = 1000
     data = {}
-    mappings = []
+    input_specs = []
+    output_specs = []
 
     for field_name in bound.field_names:
         if "equity" in field_name or "fx" in field_name or "yield" in field_name:
             key = f"synth_{field_name}"
             data[key] = torch.cumsum(torch.randn(n_rows) * 0.01, dim=0)
-            mappings.append(FieldMapping(
-                source_key=key,
-                target_field=field_name,
+            semantic = field_name.replace("_", " ").replace(".", " > ")
+            input_specs.append(InputSpec(
+                key=key,
+                semantic_type=semantic,
+                field_path=field_name,
+            ))
+            output_specs.append(OutputSpec(
+                key=key,
+                semantic_type=semantic,
+                field_path=field_name,
             ))
 
-    spec = DatasetSpec(name="Synthetic Market", mappings=mappings)
+    spec = DatasetSpec(name="Synthetic Market", input_specs=input_specs, output_specs=output_specs)
     return spec, data
 
 

@@ -11,6 +11,8 @@ Run: python examples/02_ceo_company_model.py
 
 from canvas_engineering import ConnectivityPolicy
 from general_unified_world_model.projection.subset import WorldProjection, project
+from general_unified_world_model.schema.business import Business
+from general_unified_world_model.schema.individual import Individual
 
 # CEO's specification: "Model our company in context"
 proj = WorldProjection(
@@ -45,11 +47,15 @@ proj = WorldProjection(
         "forecasts.business",
     ],
 
-    # Our company and key competitor
-    firms=["ACME", "RIVAL"],
-
-    # Key decision makers
-    individuals=["ceo", "cfo", "cto", "board_chair"],
+    # Our company, key competitor, and key decision makers
+    entities={
+        "firm_ACME": Business(),
+        "firm_RIVAL": Business(),
+        "person_ceo": Individual(),
+        "person_cfo": Individual(),
+        "person_cto": Individual(),
+        "person_board_chair": Individual(),
+    },
 
     # Custom connectivity
     connectivity=ConnectivityPolicy(
