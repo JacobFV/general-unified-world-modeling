@@ -12,10 +12,11 @@
 
 ---
 
+<!-- Figure: Heatmap of the full 857-field world model packed onto a canvas grid. Each rectangular region is color-coded by semantic domain (financial=teal, macro=blue, regime=red, narratives=purple, etc.). The spatial layout shows how fields are strip-packed left-to-right, top-to-bottom, with larger domains (financial, country blocks) occupying more area. -->
 <p align="center">
 <img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/canvas_full_world.png" width="100%" alt="Full World Model — 857 fields on 128x128 canvas" />
 </p>
-<p align="center"><em>Full World Model — 857 fields allocated on a 128×128 canvas. Each colored region is a semantic domain.</em></p>
+<p align="center"><em>Full World Model — 857 fields allocated on a canvas. Each colored region is a semantic domain.</em></p>
 
 ---
 
@@ -196,6 +197,7 @@ proj = WorldProjection(
 )
 ```
 
+<!-- Figure: LaTeX-style directed acyclic graph with rounded pastel boxes and arrows showing causal flow. Nodes: Regime State (red) → Macro Context (blue) → Financial Markets (teal) → ACME Corp (green). Executive Team (yellow) → ACME Corp. ACME Corp ←→ RIVAL Corp (dashed competitive edge). ACME Corp → Business Forecasts (purple output). Arrows show directional causality. -->
 <p align="center">
 <img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/usecase_ceo.png" width="90%" alt="CEO use case — causal interaction graph" />
 </p>
@@ -218,6 +220,7 @@ proj = WorldProjection(
 )
 ```
 
+<!-- Figure: DAG showing policy transmission. Regime State (red) → US Economy, China Economy, EU Economy (blue boxes). Bidirectional arrows between country pairs for trade/financial linkages. Policy Interventions (orange) → Financial System (teal) → US Economy → Macro Forecasts (purple). Multiple country outputs converge on forecasts. -->
 <p align="center">
 <img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/usecase_government.png" width="90%" alt="Government use case — causal interaction graph" />
 </p>
@@ -237,6 +240,7 @@ proj = WorldProjection(
 )
 ```
 
+<!-- Figure: Minimal DAG for agent use. Events (orange) → User (yellow) and Organization (green), bidirectional arrow between User ↔ Organization. Regime State (red, compressed) → Recession Forecast (purple). Small graph showing minimal world context needed for an autonomous agent. -->
 <p align="center">
 <img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/usecase_agent.png" width="70%" alt="Agent use case — causal interaction graph" />
 </p>
@@ -248,12 +252,12 @@ The training curriculum is a **DAG** (directed acyclic graph) where fork nodes t
 
 ### Declare a curriculum in YAML
 
+Canvas dimensions are auto-computed from the projected fields — like a C compiler sizing a struct. Only specify `n_layers`, `n_steps`, and `datasets` per subject; the grid size adapts to fit whatever fields the natural language description resolves to.
+
 ```yaml
 # curricula/standard.yaml
 name: my_world_model
 defaults:
-  H: 48
-  W: 48
   d_model: 64
   n_steps: 5000
 
@@ -272,40 +276,52 @@ stages:
     parallel:
       - subject: "How macro conditions drive financial markets"
         datasets: [fred_macro, yahoo_finance]
-        H: 64
-        W: 64
 
   - name: integration
     builds_on: cross_domain
     parallel:
       - subject: "Full world model"
         include: ["*"]
-        H: 128
-        W: 128
         n_steps: 10000
 ```
 
+### Natural language curriculum resolution
+
+Each `subject` string is resolved to world model field paths via keyword matching — no LLM required. This works for both **projection** (selecting what to model) and **training** (defining what to learn):
+
 ```python
-from general_unified_world_model.training.dag_curriculum import CurriculumSpec, DAGCurriculumTrainer
+from general_unified_world_model.training.dag_curriculum import (
+    CurriculumSpec, resolve_subject,
+)
 
-# Load from YAML
-spec = CurriculumSpec.from_yaml("curricula/standard.yaml")
-nodes = spec.to_training_nodes()
-
-# Or describe in natural language — keywords resolve to field paths
-from general_unified_world_model.training.dag_curriculum import resolve_subject
+# Resolve a description to field paths
 resolve_subject("How inflation drives yield curves and credit spreads")
 # → ['country_us.macro.inflation', 'financial.yield_curves', 'financial.credit', 'regime']
+
+# Load a full curriculum and train
+spec = CurriculumSpec.from_yaml("curricula/standard.yaml")
+nodes = spec.to_training_nodes()  # → 12 TrainingNode DAG
+
+# Or define inline — describe what you care about, get a trained model
+spec = CurriculumSpec(stages=[
+    CurriculumStage(name="my_domain", parallel=[
+        CurriculumSubject(
+            subject="How semiconductor supply chains affect tech stock valuations",
+            datasets=["yahoo_finance"],
+            firms=["NVDA", "TSMC"],
+        ),
+    ]),
+])
 ```
 
-Each subject description is resolved to world model field paths via keyword matching. The `builds_on` field defines the DAG: all subjects in a stage inherit merged weights from the previous stage.
+The `builds_on` field defines the DAG: all subjects in a stage inherit merged weights from the previous stage. Each subject's canvas is auto-sized from its resolved fields. The keyword matcher covers 60+ terms across all domains (financial, macro, political, resources, tech, narratives, climate, health, etc.).
 
 ### The 4-tier standard curriculum
 
-1. **Foundation** (6 parallel nodes): Financial, macro, politics, resources, tech, narratives — each trained independently on small canvases (32-48px)
+1. **Foundation** (6 parallel nodes): Financial, macro, politics, resources, tech, narratives — each trained independently on auto-sized canvases
 2. **Cross-domain** (3 parallel nodes): Macro→finance, geopolitics→commodities, narratives→markets — merging pretrained parent weights
 3. **Complex** (2 parallel nodes): Corporate strategy, policy impact — multi-parent joins
-4. **Integration** (1 node): Full 128×128 canvas, all domains, all cross-domain connections active
+4. **Integration** (1 node): Full world model, all domains, all cross-domain connections active
 
 ### Weight transfer at join points
 
@@ -448,16 +464,18 @@ The rendering system provides multiple views into the same world model state. In
 
 Each field occupies a contiguous region on the (H, W) canvas. Colors indicate semantic domain; intensity shows state magnitude.
 
+<!-- Figure: Two side-by-side canvas heatmaps on dark backgrounds. Left: a compact macro-only projection (~40 fields) showing blue/teal blocks for yield curves, credit, macro output, inflation, labor, housing, and red for regime. Right: a larger hedge fund projection (~200 fields) with the same domains plus firm-specific blocks (AAPL, NVDA) in green. Fields are strip-packed left-to-right, top-to-bottom. -->
 <p align="center">
 <img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/canvas_macro_projection.png" width="48%" alt="Macro Model Projection" />
 <img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/canvas_hedge_fund.png" width="48%" alt="Hedge Fund Projection" />
 </p>
-<p align="center"><em>Left: Macro model projection (~40 fields on 32×32). Right: Hedge fund projection with AAPL+NVDA (~200 fields on 64×64).</em></p>
+<p align="center"><em>Left: Macro model projection (~40 fields, auto-sized canvas). Right: Hedge fund projection with AAPL+NVDA (~200 fields).</em></p>
 
 ### Domain topology graphs
 
 Nodes are semantic domains, edges show attention connectivity between them. Node size ∝ field count, edge width ∝ connection density.
 
+<!-- Figure: Two network graphs on dark backgrounds. Each node is a colored circle labeled with a domain name (financial, country_us, regime, etc.) with a glow effect. Directed arrows between nodes show cross-domain attention connections — thicker/brighter arrows mean stronger connectivity. Self-loops shown as halos around nodes. Left graph: macro model with tight cluster around rates/credit/macro. Right graph: hedge fund model with additional firm nodes (AAPL, NVDA) connected to financial and macro domains. -->
 <p align="center">
 <img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/topology_macro.png" width="48%" alt="Macro Model Topology" />
 <img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/topology_hedge_fund.png" width="48%" alt="Hedge Fund Model Topology" />
@@ -470,6 +488,7 @@ These topology graphs show how different projections create different compute gr
 
 Time series views of world model fields, auto-generated or from real observations.
 
+<!-- Figure: Multi-panel time series chart on dark background. 6 subplots showing synthetic financial data: yield curves (2Y/10Y/30Y rates), credit spreads (IG/HY), equity indices (S&P 500 proxy), FX (DXY, EUR/USD), commodity prices (crude, gold), and crypto (BTC, ETH). Each line is color-coded by field, with realistic-looking synthetic dynamics. -->
 <p align="center">
 <img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/financial_charts.png" width="80%" alt="Financial Charts" />
 </p>
@@ -478,6 +497,7 @@ Time series views of world model fields, auto-generated or from real observation
 
 Each country's latent state vector is projected to RGB via PCA — the color is a 3D projection of the full state representation, not a scalar risk score. Real country boundaries rendered on orthographic globes with cartopy.
 
+<!-- Figure: Animated GIF of a rotating 3D orthographic globe on dark background. Countries are filled with distinct RGB colors derived from PCA projection of their state vectors. US is one color, China another, EU members share a color. Country codes (US, CN, EU, etc.) labeled in white. The globe continuously rotates 360 degrees, showing all hemispheres. Below it: static dual-hemisphere view showing both sides simultaneously. -->
 <p align="center">
 <img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/geopolitical_globe.gif" width="50%" alt="Rotating Geopolitical Globe" />
 </p>
@@ -487,8 +507,9 @@ Each country's latent state vector is projected to RGB via PCA — the color is 
 
 ### Regime dashboard
 
-Horizontal bars for the 12 regime state fields — value magnitude, no decoration. The compressed world state latent strip at the bottom.
+Horizontal bars for the 17 regime state fields — value magnitude, no decoration. The compressed world state latent strip at the bottom.
 
+<!-- Figure: Minimal horizontal bar chart on dark background. 17 rows, each labeled with a regime field name (growth_regime, inflation_regime, financial_cycle, credit_cycle, liquidity_regime, cooperation_vs_fragmentation, peace_vs_conflict, hegemonic_stability, etc.). Bar length shows absolute value, color ranges from cold steel blue (low) through neutral gray to signal red (high). Monospace labels with numeric values. A thin heatmap strip at the bottom shows the compressed world state vector. -->
 <p align="center">
 <img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/regime_dashboard.png" width="80%" alt="Regime Dashboard" />
 </p>
@@ -497,6 +518,7 @@ Horizontal bars for the 12 regime state fields — value magnitude, no decoratio
 
 First-person entity network. Focal entity centered, others positioned by connection strength. Edge weight and color encode relationship intensity (topology-derived + structurally inferred). Field count shown inside each node.
 
+<!-- Figure: Network graph on dark background with a central focal node (person or firm) surrounded by connected entities in concentric rings. Inner ring: strongly connected entities (firms, sectors). Outer ring: weakly connected (forecasts, events). Node shapes vary by entity type: circles for people, squares for firms, diamonds for countries, triangles for sectors, hexagons for regime. Edge colors: amber for strong links (>0.6 weight), teal for moderate (>0.3), dark blue for weak. Field count displayed as a number inside each node. Legend in upper-right shows node types and edge weight categories. -->
 <p align="center">
 <img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/social_graph_ceo.png" width="80%" alt="CEO Social Graph" />
 </p>
