@@ -47,74 +47,91 @@ from guwm.schema.supply_chain import SupplyChainNode
 from guwm.schema.country import Country
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────
+# ── Projection container ────────────────────────────────────────────────
+# compile_schema traverses dataclass fields and lists. To add dynamic
+# entities (firms, individuals, etc.) we use a container dataclass
+# with list fields that hold the dynamic instances.
 
-def _walk_fields(obj, prefix=""):
-    """Yield (dotted_path, field_value) for all Fields in a dataclass tree."""
-    if not dataclasses.is_dataclass(obj):
-        return
-    for f in dataclasses.fields(obj):
-        val = getattr(obj, f.name)
-        path = f"{prefix}.{f.name}" if prefix else f.name
-        if isinstance(val, Field):
-            yield path, val
-        elif isinstance(val, list):
-            for i, item in enumerate(val):
-                yield from _walk_fields(item, f"{path}[{i}]")
-        elif dataclasses.is_dataclass(val):
-            yield from _walk_fields(val, path)
+@dataclass
+class ProjectedWorld:
+    """A World subset with dynamic entity lists.
 
+    compile_schema traverses:
+      - dataclass fields → named regions
+      - list fields → array elements with [i] indexing
 
-def _resolve_attr(obj, dotted_path: str):
-    """Get nested attribute via dotted path like 'financial.credit.ig_spread'."""
-    parts = dotted_path.split(".")
-    current = obj
-    for part in parts:
-        if "[" in part:
-            name, idx_str = part.split("[")
-            idx = int(idx_str.rstrip("]"))
-            current = getattr(current, name)[idx]
-        else:
-            current = getattr(current, part)
-    return current
-
-
-def _set_attr(obj, dotted_path: str, value):
-    """Set nested attribute via dotted path."""
-    parts = dotted_path.split(".")
-    current = obj
-    for part in parts[:-1]:
-        if "[" in part:
-            name, idx_str = part.split("[")
-            idx = int(idx_str.rstrip("]"))
-            current = getattr(current, name)[idx]
-        else:
-            current = getattr(current, part)
-    last = parts[-1]
-    if "[" in last:
-        name, idx_str = last.split("[")
-        idx = int(idx_str.rstrip("]"))
-        getattr(current, name)[idx] = value
-    else:
-        object.__setattr__(current, last, value)
-
-
-def _has_attr(obj, dotted_path: str) -> bool:
-    """Check if nested attribute exists."""
-    try:
-        _resolve_attr(obj, dotted_path)
-        return True
-    except (AttributeError, IndexError, TypeError):
-        return False
-
-
-def _path_matches(field_path: str, include_path: str) -> bool:
-    """Check if a field path is under an include path.
-
-    'financial.credit.ig_spread' matches 'financial' and 'financial.credit'
-    but not 'financial.fx'.
+    This container exposes the same top-level layers as World,
+    plus lists for dynamic entities.
     """
-    return field_path == include_path or field_path.startswith(include_path + ".")
+    # These will be selectively populated from World
+    # Using Optional so they can be None (excluded from compilation)
+    pass
+
+
+def _make_projected_dataclass(
+    world: World,
+    include_paths: list[str],
+    exclude_paths: list[str],
+    extra_firms: dict[str, Business],
+    extra_individuals: dict[str, Individual],
+    extra_sectors: dict[str, Sector],
+    extra_supply_chains: dict[str, SupplyChainNode],
+    extra_countries: dict[str, Country],
+):
+    """Dynamically construct a projected dataclass from the World.
+
+    Since compile_schema only walks dataclass fields, we build a new
+    dataclass at runtime with exactly the fields we need.
+    """
+    fields_dict = {}
+    defaults = {}
+
+    is_wildcard = include_paths == ["*"]
+
+    # Walk the World's fields and include matching ones
+    for f in dataclasses.fields(World):
+        path = f.name
+        val = getattr(world, f.name)
+
+        if is_wildcard or _any_path_matches(path, include_paths):
+            if not _any_path_matches(path, exclude_paths):
+                fields_dict[path] = val
+
+    # Add extra dynamic entities as named fields
+    for name, obj in extra_firms.items():
+        fields_dict[f"firm_{name}"] = obj
+    for name, obj in extra_individuals.items():
+        fields_dict[f"person_{name}"] = obj
+    for name, obj in extra_sectors.items():
+        fields_dict[f"sector_{name}"] = obj
+    for name, obj in extra_supply_chains.items():
+        fields_dict[f"sc_{name}"] = obj
+    for name, obj in extra_countries.items():
+        fields_dict[f"country_{name}"] = obj
+
+    if not fields_dict:
+        raise ValueError("Projection resulted in zero fields. Check your include paths.")
+
+    # Build a dynamic dataclass
+    dc_fields = []
+    for name, val in fields_dict.items():
+        dc_fields.append(
+            (name, type(val), dataclasses.field(default_factory=lambda v=val: copy.deepcopy(v)))
+        )
+
+    ProjectedType = dataclasses.make_dataclass("ProjectedWorld", dc_fields)
+    return ProjectedType()
+
+
+def _any_path_matches(field_path: str, patterns: list[str]) -> bool:
+    """Check if a field path matches any of the include/exclude patterns."""
+    for pattern in patterns:
+        if field_path == pattern or field_path.startswith(pattern + "."):
+            return True
+        if pattern.startswith(field_path + "."):
+            # Pattern is a sub-path of this field — include the whole parent
+            return True
+    return False
 
 
 # ── Projection ──────────────────────────────────────────────────────────
@@ -149,8 +166,7 @@ class WorldProjection:
 
         temporal_start: Dict mapping entity names to their temporal start
             index. E.g. {"firm_AAPL": 100} means Apple's fields only
-            appear after timestep 100 in SFT data. The compiler will
-            set temporal_extent accordingly.
+            appear after timestep 100 in SFT data.
     """
     include: list[str] = dc_field(default_factory=lambda: ["*"])
     exclude: list[str] = dc_field(default_factory=list)
@@ -163,91 +179,6 @@ class WorldProjection:
 
     connectivity: Optional[ConnectivityPolicy] = None
     temporal_start: dict[str, int] = dc_field(default_factory=dict)
-
-
-def _build_projected_world(proj: WorldProjection) -> World:
-    """Construct a World instance with only the projected fields active."""
-    world = World()
-
-    # Add dynamic entities
-    for name in proj.firms:
-        setattr(world, f"firm_{name}", Business())
-    for name in proj.individuals:
-        setattr(world, f"person_{name}", Individual())
-    for name in proj.sectors:
-        setattr(world, f"sector_{name}", Sector())
-    for name in proj.supply_chains:
-        setattr(world, f"sc_{name}", SupplyChainNode())
-    for name in proj.countries:
-        setattr(world, f"country_{name}", Country())
-
-    # If include is ["*"], return the full world (minus excludes handled at compile)
-    if proj.include == ["*"] and not proj.exclude:
-        return world
-
-    # Otherwise, build a selective world
-    # We create a new World and only copy over the included subtrees
-    selective = World.__new__(World)
-    # Initialize all fields to None first
-    for f in dataclasses.fields(World):
-        object.__setattr__(selective, f.name, None)
-
-    # Copy dynamic entities (always included)
-    for name in proj.firms:
-        attr = f"firm_{name}"
-        if hasattr(world, attr):
-            object.__setattr__(selective, attr, getattr(world, attr))
-    for name in proj.individuals:
-        attr = f"person_{name}"
-        if hasattr(world, attr):
-            object.__setattr__(selective, attr, getattr(world, attr))
-    for name in proj.sectors:
-        attr = f"sector_{name}"
-        if hasattr(world, attr):
-            object.__setattr__(selective, attr, getattr(world, attr))
-    for name in proj.supply_chains:
-        attr = f"sc_{name}"
-        if hasattr(world, attr):
-            object.__setattr__(selective, attr, getattr(world, attr))
-    for name in proj.countries:
-        attr = f"country_{name}"
-        if hasattr(world, attr):
-            object.__setattr__(selective, attr, getattr(world, attr))
-
-    # Copy included subtrees
-    for inc_path in proj.include:
-        if inc_path == "*":
-            return world  # short-circuit
-
-        # Find the top-level field name
-        top_level = inc_path.split(".")[0]
-        if hasattr(world, top_level):
-            # If the include is the full top-level, copy the whole thing
-            if inc_path == top_level:
-                object.__setattr__(selective, top_level, getattr(world, top_level))
-            else:
-                # Partial include — we need the parent structure
-                if getattr(selective, top_level) is None:
-                    # Deep copy the full subtree (we'll prune later if needed)
-                    object.__setattr__(selective, top_level, copy.deepcopy(getattr(world, top_level)))
-
-    # Apply excludes by nulling out excluded subtrees
-    # (compile_schema skips None attributes)
-    for exc_path in proj.exclude:
-        if _has_attr(selective, exc_path):
-            top_level = exc_path.split(".")[0]
-            if exc_path == top_level:
-                object.__setattr__(selective, top_level, None)
-            else:
-                parent_path = ".".join(exc_path.split(".")[:-1])
-                field_name = exc_path.split(".")[-1]
-                try:
-                    parent = _resolve_attr(selective, parent_path)
-                    object.__setattr__(parent, field_name, None)
-                except (AttributeError, TypeError):
-                    pass
-
-    return selective
 
 
 def project(
@@ -278,7 +209,19 @@ def project(
         bound = project(proj, T=1, H=32, W=32, d_model=64)
         print(bound.summary())
     """
-    world = _build_projected_world(proj)
+    world = World()
+
+    extra_firms = {name: Business() for name in proj.firms}
+    extra_individuals = {name: Individual() for name in proj.individuals}
+    extra_sectors = {name: Sector() for name in proj.sectors}
+    extra_supply_chains = {name: SupplyChainNode() for name in proj.supply_chains}
+    extra_countries = {name: Country() for name in proj.countries}
+
+    projected = _make_projected_dataclass(
+        world, proj.include, proj.exclude,
+        extra_firms, extra_individuals, extra_sectors,
+        extra_supply_chains, extra_countries,
+    )
 
     conn = connectivity or proj.connectivity or ConnectivityPolicy(
         intra="dense",
@@ -288,7 +231,7 @@ def project(
     )
 
     bound = compile_schema(
-        world,
+        projected,
         T=T,
         H=H,
         W=W,
