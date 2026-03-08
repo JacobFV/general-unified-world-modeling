@@ -390,6 +390,28 @@ graph TD
     end
 ```
 
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    THIS((Physical))
+    RES((Resources))
+    INFRA((Infrastructure))
+    BIO((Biology))
+    HLT((Health))
+
+    THIS -->|climate constrains crop yields| RES
+    THIS -->|geographic chokepoints & lanes| INFRA
+    THIS -->|ecosystem boundary conditions| BIO
+    THIS -->|disaster impacts & pandemic risk| HLT
+
+    style THIS fill:#666,stroke:#333,color:#fff,stroke-width:3px
+    style RES fill:#666,stroke:#333,color:#fff
+    style INFRA fill:#569,stroke:#333,color:#fff
+    style BIO fill:#666,stroke:#333,color:#fff
+    style HLT fill:#569,stroke:#333,color:#fff
+```
+
 **Why this decomposition?** Climate operates on its own timescale but constrains resources (crop yields, energy demand). Geographic infrastructure — shipping lanes, cables, rail networks — changes slowly but creates chokepoints that matter in crises. Disasters are rare high-impact events that propagate through every other layer.
 
 ---
@@ -457,6 +479,31 @@ graph TD
             CS8[export_control_severity τ4]
         end
     end
+```
+
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    PHY((Physical))
+    THIS((Resources))
+    FIN((Financial))
+    SEC{{Sector CG}}
+    BIZ{{Business CG}}
+    INFRA((Infrastructure))
+
+    PHY -->|climate & geography| THIS
+    THIS -->|commodity prices| FIN
+    THIS -->|raw material inputs| SEC
+    THIS -->|cost inputs to operations| BIZ
+    THIS -->|energy enables logistics| INFRA
+
+    style THIS fill:#666,stroke:#333,color:#fff,stroke-width:3px
+    style PHY fill:#666,stroke:#333,color:#fff
+    style FIN fill:#c55,stroke:#333,color:#fff
+    style SEC fill:#c84,stroke:#333,color:#fff
+    style BIZ fill:#48c,stroke:#333,color:#fff
+    style INFRA fill:#569,stroke:#333,color:#fff
 ```
 
 **Why this decomposition?** Energy prices (tick-level) sit atop slower inventory and capacity cycles (weekly/monthly). Metals and food are priced separately but share supply chain dependencies. Water stress is a slow-burn structural risk that shows up in food and energy costs. Compute supply is the 21st-century equivalent of electricity — a resource with its own pricing, capacity constraints, and geopolitical dimensions (export controls).
@@ -549,6 +596,37 @@ graph TD
     end
 ```
 
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    RES((Resources))
+    MAC((Macro))
+    NAR((Narratives))
+    EVT((Events))
+    BIZ{{Business CG}}
+    THIS((Financial))
+    REG((Regime))
+    FOR((Forecasts))
+
+    RES -->|commodity prices| THIS
+    MAC -->|macro drives rates & spreads| THIS
+    NAR -->|beliefs drive prices — reflexivity| THIS
+    EVT -->|market-moving news| THIS
+    BIZ -->|equity & credit issuance| THIS
+    THIS -->|financial cycle signal| REG
+    THIS -->|market-implied path| FOR
+
+    style THIS fill:#c55,stroke:#333,color:#fff,stroke-width:3px
+    style RES fill:#666,stroke:#333,color:#fff
+    style MAC fill:#4a9,stroke:#333,color:#fff
+    style NAR fill:#c55,stroke:#333,color:#fff
+    style EVT fill:#c55,stroke:#333,color:#fff
+    style BIZ fill:#48c,stroke:#333,color:#fff
+    style REG fill:#ff6,stroke:#333
+    style FOR fill:#6f6,stroke:#333
+```
+
 **Why this decomposition?** Markets are the world's real-time information system. The yield curve integrates growth expectations, inflation forecasts, and risk premia into a single object. Credit conditions propagate through the real economy with a lag. FX reflects relative monetary policy and capital flows. Liquidity is the plumbing — when it breaks (repo crisis, dollar squeeze), everything else breaks. Equities and crypto are the most reflexive, sentiment-driven markets. Each sub-system has its own frequency: yield levels are tick-level, but credit impulse is monthly.
 
 ---
@@ -628,6 +706,37 @@ graph TD
     end
 ```
 
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    RES((Resources))
+    POL((Political))
+    INT((Interventions))
+    DEM((Demographics))
+    THIS((Macro))
+    FIN((Financial))
+    REG((Regime))
+    FOR((Forecasts))
+
+    RES -->|input costs & energy prices| THIS
+    POL -->|fiscal policy decisions| THIS
+    INT -->|monetary & fiscal stimulus| THIS
+    DEM -->|labor supply & dependency ratio| THIS
+    THIS -->|macro drives rates & spreads| FIN
+    THIS -->|cycle phase signal| REG
+    THIS -->|growth & inflation forecasts| FOR
+
+    style THIS fill:#4a9,stroke:#333,color:#fff,stroke-width:3px
+    style RES fill:#666,stroke:#333,color:#fff
+    style POL fill:#4a9,stroke:#333,color:#fff
+    style INT fill:#faa,stroke:#333
+    style DEM fill:#4a9,stroke:#333,color:#fff
+    style FIN fill:#c55,stroke:#333,color:#fff
+    style REG fill:#ff6,stroke:#333
+    style FOR fill:#6f6,stroke:#333
+```
+
 **Why this decomposition?** GDP is a lagging composite, so we track high-frequency nowcasts alongside official releases (with revision risk). Inflation is decomposed into components because the policy response depends on *which* prices are rising — rent vs food vs energy. Labor markets lead the cycle (claims are weekly). Fiscal position matters increasingly in a post-2020 world of large deficits. Trade and housing are transmission channels for monetary policy. Every field has a natural publication cadence built into its period.
 
 ---
@@ -683,6 +792,35 @@ graph TD
             IQ7[social_trust τ6]
         end
     end
+```
+
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    DEM((Demographics))
+    NAR((Narratives))
+    EVT((Events))
+    THIS((Political))
+    INT((Interventions))
+    LEG((Legal))
+    REG((Regime))
+
+    DEM -->|electoral composition| THIS
+    NAR -->|public sentiment shapes politics| THIS
+    EVT -->|elections & crises| THIS
+    THIS -->|policy levers activated| INT
+    THIS -->|regulatory pipeline| LEG
+    THIS -->|regime type signal| REG
+    THIS -->|political narrative framing| NAR
+
+    style THIS fill:#4a9,stroke:#333,color:#fff,stroke-width:3px
+    style DEM fill:#4a9,stroke:#333,color:#fff
+    style NAR fill:#c55,stroke:#333,color:#fff
+    style EVT fill:#c55,stroke:#333,color:#fff
+    style INT fill:#faa,stroke:#333
+    style LEG fill:#569,stroke:#333,color:#fff
+    style REG fill:#ff6,stroke:#333
 ```
 
 **Why this decomposition?** Markets react to political events (elections, policy announcements) but the *structural* political variables — institutional quality, rule of law — are the slow-moving foundations. Geopolitical state gets high loss weights because conflicts have outsized impact on all other layers. Nuclear risk at w=5.0 is the most heavily weighted political field: low probability, civilization-scale consequence.
@@ -741,6 +879,44 @@ graph TD
     end
 ```
 
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    THIS((Narratives))
+    EVT((Events))
+    IND{{Individual CG}}
+    REG((Regime))
+    FIN((Financial))
+    POL((Political))
+    MN{{MediaNarratives CG}}
+    EC{{EliteConsensus CG}}
+    PS{{PublicSentiment CG}}
+    IP{{InvestorPositioning CG}}
+
+    EVT -->|news frames events| THIS
+    IND -->|key person statements| THIS
+    REG -.->|regime colors interpretation| THIS
+    THIS -->|beliefs drive prices / reflexivity| FIN
+    THIS -->|belief formation| IND
+    THIS -->|public sentiment shapes policy| POL
+    THIS --- MN
+    THIS --- EC
+    THIS --- PS
+    THIS --- IP
+
+    style THIS fill:#c55,stroke:#333,color:#fff,stroke-width:3px
+    style EVT fill:#c55,stroke:#333,color:#fff
+    style FIN fill:#c55,stroke:#333,color:#fff
+    style IND fill:#84c,stroke:#333,color:#fff
+    style REG fill:#ff6,stroke:#333
+    style POL fill:#4a9,stroke:#333,color:#fff
+    style MN fill:#c55,stroke:#999,color:#fff,stroke-dasharray:4
+    style EC fill:#c55,stroke:#999,color:#fff,stroke-dasharray:4
+    style PS fill:#c55,stroke:#999,color:#fff,stroke-dasharray:4
+    style IP fill:#c55,stroke:#999,color:#fff,stroke-dasharray:4
+```
+
 **Why this decomposition?** Soros's reflexivity: market participants' beliefs change the fundamentals. Media narratives frame the interpretation of data releases (the same jobs report reads differently under "doom" vs "boom" framing). Elite consensus (Davos, central bankers, VCs) sets investment and policy direction. Public sentiment drives consumption and political outcomes. Investor positioning is the mechanical bridge — fund flows *are* prices, and crowded trades create fragility.
 
 ---
@@ -768,6 +944,41 @@ graph TD
         T12[patent_activity τ5]
         T13[global_r_and_d τ6]
     end
+```
+
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    THIS((Technology))
+    EDU((Education))
+    RES((Resources))
+    BIZ{{Business CG}}
+    SEC{{Sector CG}}
+    FIN((Financial))
+    MAC((Macro))
+    CYB((Cyber))
+    SPC((Space))
+
+    EDU -->|R&D talent pipeline| THIS
+    RES -->|compute supply| THIS
+    BIZ -->|R&D investment| THIS
+    THIS -->|innovation & disruption| SEC
+    THIS -->|AI / tech drives equities| FIN
+    THIS -->|productivity growth| MAC
+    THIS -->|new skill requirements| EDU
+    THIS -->|new attack surfaces| CYB
+    THIS -->|commercialization| SPC
+
+    style THIS fill:#666,stroke:#333,color:#fff,stroke-width:3px
+    style EDU fill:#569,stroke:#333,color:#fff
+    style RES fill:#666,stroke:#333,color:#fff
+    style BIZ fill:#48c,stroke:#333,color:#fff
+    style SEC fill:#c84,stroke:#333,color:#fff
+    style FIN fill:#c55,stroke:#333,color:#fff
+    style MAC fill:#4a9,stroke:#333,color:#fff
+    style CYB fill:#569,stroke:#333,color:#fff
+    style SPC fill:#569,stroke:#333,color:#fff
 ```
 
 **Why this decomposition?** Technology operates on longer timescales than markets but occasionally creates discontinuities (GPT-4, mRNA vaccines). AI gets the most fields and highest weights because it's the meta-technology — it accelerates every other field. Productivity growth is the single most important long-run economic variable. The layer is deliberately sparse because technology is hard to forecast; the model should learn what it can and be honest about epistemic limits.
@@ -806,6 +1017,38 @@ graph TD
             AB5[aquaculture_output τ5]
         end
     end
+```
+
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    THIS((Biology))
+    PHY((Physical))
+    RES((Resources))
+    HLT((Health))
+    DEM((Demographics))
+    ESC{{EcosystemState CG}}
+    DST{{DiseaseState CG}}
+    AGB{{AgriBiology CG}}
+
+    PHY -->|climate, land & water| THIS
+    RES -->|agricultural inputs| THIS
+    THIS -->|disease dynamics & pandemic risk| HLT
+    THIS -->|crop yields & fisheries| RES
+    THIS -->|mortality & fertility effects| DEM
+    THIS --- ESC
+    THIS --- DST
+    THIS --- AGB
+
+    style THIS fill:#666,stroke:#333,color:#fff,stroke-width:3px
+    style PHY fill:#666,stroke:#333,color:#fff
+    style RES fill:#666,stroke:#333,color:#fff
+    style HLT fill:#569,stroke:#333,color:#fff
+    style DEM fill:#4a9,stroke:#333,color:#fff
+    style ESC fill:#666,stroke:#999,color:#fff,stroke-dasharray:4
+    style DST fill:#666,stroke:#999,color:#fff,stroke-dasharray:4
+    style AGB fill:#666,stroke:#999,color:#fff,stroke-dasharray:4
 ```
 
 **Why this decomposition?** COVID demonstrated that biological systems can suddenly dominate all other layers. Ecosystem collapse (biodiversity, pollinators) is a slow-burn risk with catastrophic tail outcomes. Disease state tracks pandemic readiness and emerging threats. Agricultural biology feeds into food system prices and food security. Each sub-system has elevated loss weights because biological risks are systematically underpriced by markets.
@@ -858,6 +1101,47 @@ graph TD
     end
 ```
 
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    THIS((Infrastructure))
+    PHY((Physical))
+    RES((Resources))
+    TECH((Technology))
+    BIZ{{Business CG}}
+    FIN((Financial))
+    CYB((Cyber))
+    PG{{PowerGrid CG}}
+    TN{{Transport CG}}
+    TC{{Telecom CG}}
+    US{{UrbanSystems CG}}
+
+    PHY -->|geographic constraints| THIS
+    RES -->|energy inputs| THIS
+    TECH -->|digitization, EVs & 5G| THIS
+    THIS -->|enables resource flows & logistics| RES
+    THIS -->|backbone for markets| FIN
+    THIS -->|operational platform| BIZ
+    THIS -->|expanded attack surface| CYB
+    THIS --- PG
+    THIS --- TN
+    THIS --- TC
+    THIS --- US
+
+    style THIS fill:#569,stroke:#333,color:#fff,stroke-width:3px
+    style PHY fill:#666,stroke:#333,color:#fff
+    style RES fill:#666,stroke:#333,color:#fff
+    style TECH fill:#666,stroke:#333,color:#fff
+    style BIZ fill:#48c,stroke:#333,color:#fff
+    style FIN fill:#c55,stroke:#333,color:#fff
+    style CYB fill:#569,stroke:#333,color:#fff
+    style PG fill:#569,stroke:#999,color:#fff,stroke-dasharray:4
+    style TN fill:#569,stroke:#999,color:#fff,stroke-dasharray:4
+    style TC fill:#569,stroke:#999,color:#fff,stroke-dasharray:4
+    style US fill:#569,stroke:#999,color:#fff,stroke-dasharray:4
+```
+
 **Why this decomposition?** Infrastructure has the widest frequency spread: peak demand is hourly, but generation capacity changes monthly and renewable penetration is quarterly. Transport and telecom are separate because their failure modes are different. Urban systems connect to housing markets and demographics. Blackout risk gets elevated loss weight because grid failures cascade into every other system.
 
 ---
@@ -889,6 +1173,38 @@ graph TD
     end
 ```
 
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    THIS((Cyber))
+    TECH((Technology))
+    POL((Political))
+    BIZ{{Business CG}}
+    INFRA((Infrastructure))
+    FIN((Financial))
+    CTL{{ThreatLandscape CG}}
+    DE{{DigitalEcosystem CG}}
+
+    TECH -->|new attack surfaces| THIS
+    POL -->|nation-state operations| THIS
+    BIZ -->|firm vulnerabilities| THIS
+    THIS -->|attacks on grid & telecom| INFRA
+    THIS -->|exchange & market security| FIN
+    THIS -->|firm cyber risk| BIZ
+    THIS --- CTL
+    THIS --- DE
+
+    style THIS fill:#569,stroke:#333,color:#fff,stroke-width:3px
+    style TECH fill:#666,stroke:#333,color:#fff
+    style POL fill:#4a9,stroke:#333,color:#fff
+    style BIZ fill:#48c,stroke:#333,color:#fff
+    style INFRA fill:#569,stroke:#333,color:#fff
+    style FIN fill:#c55,stroke:#333,color:#fff
+    style CTL fill:#569,stroke:#999,color:#fff,stroke-dasharray:4
+    style DE fill:#569,stroke:#999,color:#fff,stroke-dasharray:4
+```
+
 **Why this decomposition?** Cyber threats are one of the few domains where the attack surface grows faster than defenses. Nation-state activity and zero-day inventory track the offensive capability landscape. Critical infrastructure targeting bridges cyber to physical systems. The digital ecosystem fields track structural features of the internet itself — platform concentration, data sovereignty — that shape what kinds of attacks are possible.
 
 ---
@@ -916,6 +1232,34 @@ graph TD
             SE5[space_mining_progress τ6]
         end
     end
+```
+
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    THIS((Space))
+    TECH((Technology))
+    POL((Political))
+    INFRA((Infrastructure))
+    CYB((Cyber))
+    FIN((Financial))
+    NAR((Narratives))
+
+    TECH -->|launch technology| THIS
+    POL -->|geopolitics & competition| THIS
+    THIS -->|satellite internet & GPS| INFRA
+    THIS -->|orbital attack surface| CYB
+    THIS -->|space economy revenue| FIN
+    THIS -->|space race narrative| NAR
+
+    style THIS fill:#569,stroke:#333,color:#fff,stroke-width:3px
+    style TECH fill:#666,stroke:#333,color:#fff
+    style POL fill:#4a9,stroke:#333,color:#fff
+    style INFRA fill:#569,stroke:#333,color:#fff
+    style CYB fill:#569,stroke:#333,color:#fff
+    style FIN fill:#c55,stroke:#333,color:#fff
+    style NAR fill:#c55,stroke:#333,color:#fff
 ```
 
 **Why this decomposition?** Kessler syndrome (collision cascading) is a low-probability, high-consequence risk to communications, GPS, and military systems. Launch cost tracks the SpaceX-driven deflation curve. Satellite internet is already affecting telecom markets. The layer is small but connects to infrastructure, cyber, and geopolitics.
@@ -946,6 +1290,38 @@ graph TD
             PH5["health_inequality τ6 (w=1.5)"]
         end
     end
+```
+
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    BIO((Biology))
+    PHY((Physical))
+    DEM((Demographics))
+    RES((Resources))
+    THIS((Health))
+    MAC((Macro))
+    FIN((Financial))
+    EDU((Education))
+
+    BIO -->|disease dynamics & pandemic risk| THIS
+    PHY -->|natural disasters| THIS
+    DEM -->|aging population burden| THIS
+    RES -->|food security| THIS
+    THIS -->|life expectancy & mortality| DEM
+    THIS -->|workforce availability| MAC
+    THIS -->|pharma & healthcare sector| FIN
+    THIS -->|healthcare worker training| EDU
+
+    style THIS fill:#569,stroke:#333,color:#fff,stroke-width:3px
+    style BIO fill:#666,stroke:#333,color:#fff
+    style PHY fill:#666,stroke:#333,color:#fff
+    style DEM fill:#4a9,stroke:#333,color:#fff
+    style RES fill:#666,stroke:#333,color:#fff
+    style MAC fill:#4a9,stroke:#333,color:#fff
+    style FIN fill:#c55,stroke:#333,color:#fff
+    style EDU fill:#569,stroke:#333,color:#fff
 ```
 
 **Why this decomposition?** COVID revealed that healthcare capacity is a binding constraint on economic activity. ICU utilization is the canary — when it spikes, policy responses follow. Mental health crisis and substance abuse are slow-burn risks that show up in labor force participation and productivity. Health inequality connects to political polarization and social trust.
@@ -979,6 +1355,35 @@ graph TD
     end
 ```
 
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    DEM((Demographics))
+    TECH((Technology))
+    POL((Political))
+    FIN((Financial))
+    THIS((Education))
+    MAC((Macro))
+    BIZ{{Business CG}}
+
+    DEM -->|youth population & enrollment| THIS
+    TECH -->|new skill requirements| THIS
+    POL -->|funding decisions| THIS
+    FIN -->|university funding| THIS
+    THIS -->|R&D pipeline & talent| TECH
+    THIS -->|productivity & labor quality| MAC
+    THIS -->|workforce talent pipeline| BIZ
+
+    style THIS fill:#569,stroke:#333,color:#fff,stroke-width:3px
+    style DEM fill:#4a9,stroke:#333,color:#fff
+    style TECH fill:#666,stroke:#333,color:#fff
+    style POL fill:#4a9,stroke:#333,color:#fff
+    style FIN fill:#c55,stroke:#333,color:#fff
+    style MAC fill:#4a9,stroke:#333,color:#fff
+    style BIZ fill:#48c,stroke:#333,color:#fff
+```
+
 **Why this decomposition?** Skill gaps are the binding constraint on technology adoption. STEM graduation rates constrain AI development. Remote work share reshapes commercial real estate and urban systems. These fields operate on long timescales but have compounding effects.
 
 ---
@@ -1003,6 +1408,35 @@ graph TD
         D9[human_capital_index τ7]
         D10["working_age_growth τ7 (w=2.0)"]
     end
+```
+
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    HLT((Health))
+    BIO((Biology))
+    RES((Resources))
+    THIS((Demographics))
+    MAC((Macro))
+    FIN((Financial))
+    POL((Political))
+
+    HLT -->|life expectancy & mortality| THIS
+    BIO -->|disease effects on population| THIS
+    RES -->|food security affects fertility| THIS
+    THIS -->|labor supply & potential growth| MAC
+    THIS -->|aging demand for healthcare| HLT
+    THIS -->|long-term savings & pensions| FIN
+    THIS -->|electoral composition| POL
+
+    style THIS fill:#4a9,stroke:#333,color:#fff,stroke-width:3px
+    style HLT fill:#569,stroke:#333,color:#fff
+    style BIO fill:#666,stroke:#333,color:#fff
+    style RES fill:#666,stroke:#333,color:#fff
+    style MAC fill:#4a9,stroke:#333,color:#fff
+    style FIN fill:#c55,stroke:#333,color:#fff
+    style POL fill:#4a9,stroke:#333,color:#fff
 ```
 
 **Why this decomposition?** Demographics is destiny — but slowly. Working-age population growth determines potential GDP growth decades in advance. Dependency ratios drive fiscal pressure. Migration is the one fast-moving demographic variable (annual vs decadal). The layer is per-country, embedded inside `Country`.
@@ -1034,6 +1468,34 @@ graph TD
             LS5[international_arbitration τ5]
         end
     end
+```
+
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    POL((Political))
+    EVT((Events))
+    THIS((Legal))
+    BIZ{{Business CG}}
+    FIN((Financial))
+    CYB((Cyber))
+    NAR((Narratives))
+
+    POL -->|legislative output & regulatory pipeline| THIS
+    EVT -->|landmark court cases| THIS
+    THIS -->|regulatory burden & compliance costs| BIZ
+    THIS -->|regulatory risk to markets| FIN
+    THIS -->|data sovereignty regulation| CYB
+    THIS -->|legal uncertainty shapes sentiment| NAR
+
+    style THIS fill:#569,stroke:#333,color:#fff,stroke-width:3px
+    style POL fill:#4a9,stroke:#333,color:#fff
+    style EVT fill:#c55,stroke:#333,color:#fff
+    style BIZ fill:#48c,stroke:#333,color:#fff
+    style FIN fill:#c55,stroke:#333,color:#fff
+    style CYB fill:#569,stroke:#333,color:#fff
+    style NAR fill:#c55,stroke:#333,color:#fff
 ```
 
 **Why this decomposition?** Regulatory environment changes at quarterly cadence (new rules, enforcement actions) while the underlying legal system quality is annual/structural. High loss weights on rule of law and corruption because these are among the strongest predictors of long-run economic outcomes.
@@ -1079,6 +1541,47 @@ graph TD
     end
 ```
 
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    THIS{{Sector CG}}
+    TECH((Technology))
+    RES((Resources))
+    MAC((Macro))
+    POL((Political))
+    FIN((Financial))
+    BIZ{{Business CG}}
+    DEM[Demand CG]
+    SUP[Supply CG]
+    PRF[Profitability CG]
+    STR[Structural CG]
+
+    TECH -->|innovation & disruption risk| THIS
+    RES -->|input costs & material pressure| THIS
+    MAC -->|macro demand context| THIS
+    POL -->|regulatory risk| THIS
+    THIS -->|sector activity & GDP contribution| MAC
+    THIS -->|sector equity performance| FIN
+    THIS -->|operating context per firm| BIZ
+    THIS --- DEM
+    THIS --- SUP
+    THIS --- PRF
+    THIS --- STR
+
+    style THIS fill:#c84,stroke:#333,color:#fff,stroke-width:3px
+    style TECH fill:#666,stroke:#333,color:#fff
+    style RES fill:#666,stroke:#333,color:#fff
+    style MAC fill:#4a9,stroke:#333,color:#fff
+    style POL fill:#4a9,stroke:#333,color:#fff
+    style FIN fill:#c55,stroke:#333,color:#fff
+    style BIZ fill:#48c,stroke:#333,color:#fff
+    style DEM fill:#c84,stroke:#999,color:#fff,stroke-dasharray:4
+    style SUP fill:#c84,stroke:#999,color:#fff,stroke-dasharray:4
+    style PRF fill:#c84,stroke:#999,color:#fff,stroke-dasharray:4
+    style STR fill:#c84,stroke:#999,color:#fff,stroke-dasharray:4
+```
+
 **Why this decomposition?** Sectors are the natural unit of equity analysis. Demand/supply/profitability captures the operating leverage cycle. Structural fields (disruption risk, concentration) drive long-run sector returns. Each sector is a dynamic entity — add `entities={"sector_tech": Sector(), "sector_energy": Sector()}` to include sector-level analysis in a projection.
 
 ---
@@ -1102,6 +1605,30 @@ graph TD
         SC8[geographic_risk τ4]
         SC9["single_point_of_failure τ5 (w=3.0)"]
     end
+```
+
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    THIS{{SupplyChain CG}}
+    RES((Resources))
+    PHY((Physical))
+    BIZ{{Business CG}}
+    FIN((Financial))
+
+    RES -->|commodity & material flows| THIS
+    PHY -->|geographic & logistics risk| THIS
+    BIZ -->|demand signals & inventory targets| THIS
+    THIS -->|fragility, lead time & inventory state| BIZ
+    THIS -->|disruption repricing signal| FIN
+    THIS -->|feedback on material demand| RES
+
+    style THIS fill:#aa4,stroke:#333,color:#fff,stroke-width:3px
+    style RES fill:#666,stroke:#333,color:#fff
+    style PHY fill:#666,stroke:#333,color:#fff
+    style BIZ fill:#48c,stroke:#333,color:#fff
+    style FIN fill:#c55,stroke:#333,color:#fff
 ```
 
 **Why this decomposition?** Supply chain disruptions (COVID, Suez Canal, semiconductor shortages) propagate non-linearly. The key insight is that *concentration* and *substitutability* determine fragility. Single point of failure gets the highest weight (w=3.0) because it identifies the nodes where disruption is catastrophic. The layer is embedded inside `Business` entities, creating a firm-level supply chain graph.
@@ -1191,6 +1718,55 @@ graph TD
     end
 ```
 
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    THIS{{Business CG}}
+    SEC{{Sector CG}}
+    CTY((Country / Macro))
+    FIN((Financial))
+    IND{{Individual CG}}
+    EVT((Events))
+    FOR((Forecasts))
+    FF[FirmFinancials CG]
+    FO[FirmOperations CG]
+    FS[FirmStrategy CG]
+    FM[FirmMarketPos CG]
+    FR[FirmRisk CG]
+    SC[SupplyChain CG]
+
+    SEC -->|operating context via sector_link| THIS
+    CTY -->|macro & regulatory context via geo_link| THIS
+    FIN -->|market pricing & credit spreads| THIS
+    IND -->|decision-making via org_link| THIS
+    EVT -->|earnings calls & filings| THIS
+    THIS -->|equity & credit pricing| FIN
+    THIS -->|corporate announcements| EVT
+    THIS -->|business forecast targets| FOR
+    THIS -->|bottom-up sector contribution| SEC
+    THIS --- FF
+    THIS --- FO
+    THIS --- FS
+    THIS --- FM
+    THIS --- FR
+    THIS --- SC
+
+    style THIS fill:#48c,stroke:#333,color:#fff,stroke-width:3px
+    style SEC fill:#c84,stroke:#333,color:#fff
+    style CTY fill:#4a9,stroke:#333,color:#fff
+    style FIN fill:#c55,stroke:#333,color:#fff
+    style IND fill:#84c,stroke:#333,color:#fff
+    style EVT fill:#c55,stroke:#333,color:#fff
+    style FOR fill:#6f6,stroke:#333
+    style FF fill:#48c,stroke:#999,color:#fff,stroke-dasharray:4
+    style FO fill:#48c,stroke:#999,color:#fff,stroke-dasharray:4
+    style FS fill:#48c,stroke:#999,color:#fff,stroke-dasharray:4
+    style FM fill:#48c,stroke:#999,color:#fff,stroke-dasharray:4
+    style FR fill:#48c,stroke:#999,color:#fff,stroke-dasharray:4
+    style SC fill:#aa4,stroke:#999,color:#fff,stroke-dasharray:4
+```
+
 **Why this decomposition?** Business is where the macro-financial-political worlds meet the micro-reality of a single firm. The 57-field decomposition covers the full analyst toolkit: financial statements (income, balance sheet, cash flow), operational metrics (capacity, backlog, quality), strategic positioning (moat, management, M&A), market pricing (equity, credit, vol), and risk factors. Latent variables (health, momentum, tail_risk) are unobserved — the model learns to infer them from the observed fields. Each firm also embeds a `SupplyChainNode`, connecting the firm-level graph to the supply chain network.
 
 ---
@@ -1244,6 +1820,43 @@ graph TD
     end
 ```
 
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    THIS{{Individual CG}}
+    BIZ{{Business CG}}
+    NAR((Narratives))
+    EVT((Events))
+    REG((Regime))
+    PC[PersonCognitive CG]
+    PI[PersonIncentives CG]
+    PN[PersonNetwork CG]
+    PS[PersonState CG]
+
+    BIZ -->|role & incentives via org_link| THIS
+    NAR -->|belief formation & framing| THIS
+    EVT -->|information exposure| THIS
+    REG -.->|world-state context| THIS
+    THIS -->|decision-making drives firm strategy| BIZ
+    THIS -->|key-person public statements| NAR
+    THIS -->|executive actions create events| EVT
+    THIS --- PC
+    THIS --- PI
+    THIS --- PN
+    THIS --- PS
+
+    style THIS fill:#84c,stroke:#333,color:#fff,stroke-width:3px
+    style BIZ fill:#48c,stroke:#333,color:#fff
+    style NAR fill:#c55,stroke:#333,color:#fff
+    style EVT fill:#c55,stroke:#333,color:#fff
+    style REG fill:#ff6,stroke:#333
+    style PC fill:#84c,stroke:#999,color:#fff,stroke-dasharray:4
+    style PI fill:#84c,stroke:#999,color:#fff,stroke-dasharray:4
+    style PN fill:#84c,stroke:#999,color:#fff,stroke-dasharray:4
+    style PS fill:#84c,stroke:#999,color:#fff,stroke-dasharray:4
+```
+
 **Why this decomposition?** Individual decision-makers can move markets. A Fed chair's hawkishness, a CEO's risk appetite, a president's belligerence — these matter. The decomposition follows behavioral economics: cognitive style determines *how* information is processed; incentives determine *what* actions are likely; network position determines *influence*; current state determines *timing*. Private information proxy (w=3.0) is the holy grail — what does this person know that the market doesn't?
 
 ---
@@ -1270,6 +1883,34 @@ graph TD
         EV9["central_bank_comms τ4 (w=2.0)"]
         EV10["election_event τ3 (w=2.0)"]
     end
+```
+
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    THIS((Events))
+    BIZ{{Business CG}}
+    POL((Political))
+    PHY((Physical))
+    MAC((Macro))
+    NAR((Narratives))
+    FIN((Financial))
+
+    BIZ -->|earnings calls & corporate filings| THIS
+    POL -->|policy announcements & elections| THIS
+    PHY -->|disaster & conflict events| THIS
+    MAC -->|macro data releases| THIS
+    THIS -->|frames interpretation & narrative salience| NAR
+    THIS -->|market-moving event signal| FIN
+
+    style THIS fill:#c55,stroke:#333,color:#fff,stroke-width:3px
+    style BIZ fill:#48c,stroke:#333,color:#fff
+    style POL fill:#4a9,stroke:#333,color:#fff
+    style PHY fill:#666,stroke:#333,color:#fff
+    style MAC fill:#4a9,stroke:#333,color:#fff
+    style NAR fill:#c55,stroke:#333,color:#fff
+    style FIN fill:#c55,stroke:#333,color:#fff
 ```
 
 ### Data Channel Trust
@@ -1311,6 +1952,31 @@ graph TD
     end
 ```
 
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    THIS((Trust))
+    GOV[GovStats CG]
+    MKT[MarketData CG]
+    ALT[AltData CG]
+    CORP[Corporate CG]
+    OBS((All Observation Layers))
+
+    THIS -->|epistemic weight on gov statistics| GOV
+    THIS -->|epistemic weight on market data| MKT
+    THIS -->|epistemic weight on alt data| ALT
+    THIS -->|epistemic weight on corporate disclosures| CORP
+    THIS -->|calibrated observation weight| OBS
+
+    style THIS fill:#aaf,stroke:#333,color:#333,stroke-width:3px
+    style GOV fill:#aaf,stroke:#999,color:#333,stroke-dasharray:4
+    style MKT fill:#aaf,stroke:#999,color:#333,stroke-dasharray:4
+    style ALT fill:#aaf,stroke:#999,color:#333,stroke-dasharray:4
+    style CORP fill:#aaf,stroke:#999,color:#333,stroke-dasharray:4
+    style OBS fill:#888,stroke:#333,color:#fff,stroke-dasharray:5
+```
+
 ### Regime State
 
 **Frequency**: τ5–τ7 (quarterly to decadal) · **Fields**: 17
@@ -1348,6 +2014,46 @@ graph TD
     end
 ```
 
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    THIS((Regime))
+    MAC((Macro))
+    FIN((Financial))
+    POL((Political))
+    TECH((Technology))
+    FOR((Forecasts))
+    NAR((Narratives))
+    ER[EconomicRegime CG]
+    GR[GeopoliticalRegime CG]
+    TR[TechnologyRegime CG]
+    SR[SystemicRisk CG]
+
+    MAC -->|growth & inflation signals| THIS
+    FIN -->|financial cycle & liquidity| THIS
+    POL -->|geopolitical & conflict signals| THIS
+    TECH -->|AI acceleration & energy transition| THIS
+    THIS -->|active causal path for forecast| FOR
+    THIS -->|regime colors interpretation| NAR
+    THIS --- ER
+    THIS --- GR
+    THIS --- TR
+    THIS --- SR
+
+    style THIS fill:#ff6,stroke:#333,color:#333,stroke-width:3px
+    style MAC fill:#4a9,stroke:#333,color:#fff
+    style FIN fill:#c55,stroke:#333,color:#fff
+    style POL fill:#4a9,stroke:#333,color:#fff
+    style TECH fill:#666,stroke:#333,color:#fff
+    style FOR fill:#6f6,stroke:#333
+    style NAR fill:#c55,stroke:#333,color:#fff
+    style ER fill:#ff6,stroke:#999,color:#333,stroke-dasharray:4
+    style GR fill:#ff6,stroke:#999,color:#333,stroke-dasharray:4
+    style TR fill:#ff6,stroke:#999,color:#333,stroke-dasharray:4
+    style SR fill:#ff6,stroke:#999,color:#333,stroke-dasharray:4
+```
+
 ### Intervention Space
 
 **Frequency**: varies · **Fields**: 13
@@ -1375,6 +2081,34 @@ graph TD
             CF4["unintended_consequences (w=3.0)"]
         end
     end
+```
+
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    THIS((Interventions))
+    POL((Political))
+    MAC((Macro))
+    FIN((Financial))
+    FOR((Forecasts))
+    PI[PolicyInterventions CG]
+    CF[CounterfactualHeads CG]
+
+    POL -->|policy decisions & legislative actions| THIS
+    THIS -->|monetary & fiscal transmission| MAC
+    THIS -->|market intervention signal| FIN
+    THIS -->|counterfactual scenario heads| FOR
+    THIS --- PI
+    THIS --- CF
+
+    style THIS fill:#faa,stroke:#333,color:#333,stroke-width:3px
+    style POL fill:#4a9,stroke:#333,color:#fff
+    style MAC fill:#4a9,stroke:#333,color:#fff
+    style FIN fill:#c55,stroke:#333,color:#fff
+    style FOR fill:#6f6,stroke:#333
+    style PI fill:#faa,stroke:#999,color:#333,stroke-dasharray:4
+    style CF fill:#faa,stroke:#999,color:#333,stroke-dasharray:4
 ```
 
 ### Forecast Bundle
@@ -1428,6 +2162,46 @@ graph TD
             UD6["calibration_score (w=3.0)"]
         end
     end
+```
+
+**Connections to other layers:**
+
+```mermaid
+graph LR
+    THIS((Forecasts))
+    REG((Regime))
+    BIZ{{Business CG}}
+    SEC{{Sector CG}}
+    IND{{Individual CG}}
+    INT((Interventions))
+    MF[MacroForecast CG]
+    FF[FinancialForecast CG]
+    GF[GeopoliticalForecast CG]
+    BF[BusinessForecast CG]
+    UD[UncertaintyDecomp CG]
+
+    REG -->|compressed world state determines path| THIS
+    BIZ -->|firm-level entity CG inputs| THIS
+    SEC -->|sector-level entity CG inputs| THIS
+    IND -->|individual-level entity CG inputs| THIS
+    INT -->|counterfactual scenario heads| THIS
+    THIS --- MF
+    THIS --- FF
+    THIS --- GF
+    THIS --- BF
+    THIS --- UD
+
+    style THIS fill:#6f6,stroke:#333,color:#333,stroke-width:3px
+    style REG fill:#ff6,stroke:#333,color:#333
+    style BIZ fill:#48c,stroke:#333,color:#fff
+    style SEC fill:#c84,stroke:#333,color:#fff
+    style IND fill:#84c,stroke:#333,color:#fff
+    style INT fill:#faa,stroke:#333,color:#333
+    style MF fill:#6f6,stroke:#999,color:#333,stroke-dasharray:4
+    style FF fill:#6f6,stroke:#999,color:#333,stroke-dasharray:4
+    style GF fill:#6f6,stroke:#999,color:#333,stroke-dasharray:4
+    style BF fill:#6f6,stroke:#999,color:#333,stroke-dasharray:4
+    style UD fill:#6f6,stroke:#999,color:#333,stroke-dasharray:4
 ```
 
 ---
