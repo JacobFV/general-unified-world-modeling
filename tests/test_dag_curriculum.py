@@ -28,7 +28,7 @@ class TestTrainingNode:
             include=["financial"],
         )
         assert node.parents == []
-        assert node.H == 32
+        assert node.H is None  # auto-sized by project()
         assert node.d_model == 64
         assert node.n_steps == 5000
         assert node.firms == []

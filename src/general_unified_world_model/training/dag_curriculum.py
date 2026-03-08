@@ -74,8 +74,8 @@ class TrainingNode:
     description: str
     include: list[str]
     parents: list[str] = dc_field(default_factory=list)
-    H: int = 32
-    W: int = 32
+    H: int | None = None
+    W: int | None = None
     d_model: int = 64
     n_layers: int = 4
     n_loops: int = 3
@@ -95,42 +95,42 @@ TIER_0_FOUNDATION = [
         name="basic_finance",
         description="Core financial markets: yield curves, credit spreads, equity indices, FX, crypto, central bank policy rates",
         include=["financial"],
-        H=48, W=48, n_layers=6,
+        n_layers=6,
         data_sources=["yahoo_finance", "fred_rates"],
     ),
     TrainingNode(
         name="basic_economics",
         description="Macroeconomic fundamentals: GDP, inflation, unemployment, industrial production, trade, housing",
         include=["country_us.macro", "country_cn.macro", "country_eu.macro"],
-        H=48, W=48, n_layers=4,
+        n_layers=4,
         data_sources=["fred_macro"],
     ),
     TrainingNode(
         name="basic_politics",
         description="Political systems and governance: elections, policy regimes, institutional quality, geopolitical tensions",
         include=["country_us.politics", "country_cn.politics", "country_eu.politics"],
-        H=32, W=32, n_layers=4,
+        n_layers=4,
         data_sources=[],
     ),
     TrainingNode(
         name="basic_resources",
         description="Energy, metals, agriculture, water, compute resources: production, consumption, prices, reserves",
         include=["resources"],
-        H=32, W=32, n_layers=4,
+        n_layers=4,
         data_sources=["yahoo_commodities"],
     ),
     TrainingNode(
         name="basic_technology",
         description="Technology frontier: AI capabilities, semiconductor production, data center capacity, R&D spending",
         include=["technology"],
-        H=32, W=32, n_layers=4,
+        n_layers=4,
         data_sources=[],
     ),
     TrainingNode(
         name="basic_narratives",
         description="Narratives and beliefs: media sentiment, elite consensus, public opinion, investor positioning",
         include=["narratives", "events"],
-        H=32, W=32, n_layers=4,
+        n_layers=4,
         data_sources=["news_embeddings"],
     ),
 ]
@@ -141,7 +141,7 @@ TIER_1_CROSS_DOMAIN = [
         description="How macroeconomic indicators drive financial markets: GDP growth → equities, inflation → rates, employment → credit",
         include=["financial", "country_us.macro", "regime", "forecasts.macro", "forecasts.financial"],
         parents=["basic_finance", "basic_economics"],
-        H=64, W=64, n_layers=8,
+        n_layers=8,
         data_sources=["yahoo_finance", "fred_macro", "fred_rates"],
     ),
     TrainingNode(
@@ -149,7 +149,7 @@ TIER_1_CROSS_DOMAIN = [
         description="Geopolitical events driving commodity markets: sanctions → oil, trade wars → metals, conflict → food prices",
         include=["resources", "country_us.politics", "country_cn.politics", "events", "regime"],
         parents=["basic_politics", "basic_resources"],
-        H=48, W=48, n_layers=6,
+        n_layers=6,
         data_sources=["yahoo_commodities"],
     ),
     TrainingNode(
@@ -157,7 +157,7 @@ TIER_1_CROSS_DOMAIN = [
         description="How narratives and sentiment drive market dynamics: media tone → equity flows, positioning → volatility",
         include=["narratives", "financial.equities", "financial.credit", "events", "regime"],
         parents=["basic_narratives", "basic_finance"],
-        H=48, W=48, n_layers=6,
+        n_layers=6,
         data_sources=["yahoo_finance", "news_embeddings"],
     ),
 ]
@@ -169,7 +169,7 @@ TIER_2_COMPLEX = [
         include=["financial.equities", "country_us.macro", "regime", "forecasts.business"],
         parents=["econ_drives_finance"],
         firms=["AAPL", "NVDA", "MSFT"],
-        H=64, W=64, n_layers=8,
+        n_layers=8,
         data_sources=["yahoo_finance", "fred_macro"],
     ),
     TrainingNode(
@@ -179,7 +179,7 @@ TIER_2_COMPLEX = [
                  "interventions", "regime", "forecasts"],
         parents=["econ_drives_finance", "geopolitics_commodities"],
         countries=["jp", "uk"],
-        H=64, W=64, n_layers=8,
+        n_layers=8,
         data_sources=["fred_macro", "fred_rates", "yahoo_finance"],
     ),
 ]
@@ -190,7 +190,7 @@ TIER_3_INTEGRATION = [
         description="Full world model integration: all domains on one canvas, regime state receives gradient from everything",
         include=["*"],
         parents=["corporate_strategy", "policy_impact", "narratives_drive_markets"],
-        H=128, W=128, n_layers=12,
+        n_layers=12,
         n_steps=10000,
         lr=3e-5,
         batch_size=16,
@@ -768,7 +768,7 @@ class CurriculumSpec:
     name: str = "curriculum"
     stages: list[CurriculumStage] = dc_field(default_factory=list)
     defaults: dict = dc_field(default_factory=lambda: {
-        "H": 32, "W": 32, "d_model": 64,
+        "d_model": 64,
         "n_layers": 4, "n_loops": 3,
         "n_steps": 5000, "lr": 1e-4, "batch_size": 32,
     })
@@ -819,7 +819,7 @@ class CurriculumSpec:
                     description=subj.subject,
                     include=include,
                     parents=parents,
-                    H=d["H"], W=d["W"], d_model=d["d_model"],
+                    H=d.get("H"), W=d.get("W"), d_model=d["d_model"],
                     n_layers=d["n_layers"], n_loops=d["n_loops"],
                     n_steps=d["n_steps"], lr=d.get("lr", 1e-4),
                     batch_size=d.get("batch_size", 32),
@@ -963,7 +963,7 @@ class CurriculumSpec:
 
 STANDARD_CURRICULUM = CurriculumSpec(
     name="general_unified_world_model",
-    defaults={"H": 48, "W": 48, "d_model": 64, "n_layers": 6, "n_loops": 3, "n_steps": 5000},
+    defaults={"d_model": 64, "n_layers": 6, "n_loops": 3, "n_steps": 5000},
     stages=[
         CurriculumStage(
             name="foundations",
@@ -999,7 +999,7 @@ STANDARD_CURRICULUM = CurriculumSpec(
                 CurriculumSubject(
                     subject="How macroeconomic conditions drive financial markets: GDP → equities, inflation → rates",
                     datasets=["fred_macro", "fred_rates", "yahoo_finance"],
-                    n_layers=8, H=64, W=64,
+                    n_layers=8,
                 ),
                 CurriculumSubject(
                     subject="Geopolitical events driving commodity prices: sanctions → oil, trade wars → metals",
@@ -1019,13 +1019,13 @@ STANDARD_CURRICULUM = CurriculumSpec(
                     subject="Corporate strategy and decision-making in macroeconomic context",
                     firms=["AAPL", "NVDA", "MSFT"],
                     datasets=["yahoo_finance", "fred_macro"],
-                    n_layers=8, H=64, W=64,
+                    n_layers=8,
                 ),
                 CurriculumSubject(
                     subject="Policy analysis: monetary transmission, fiscal multipliers, regulatory impact on markets",
                     countries=["jp", "uk"],
                     datasets=["fred_macro", "fred_rates", "yahoo_finance"],
-                    n_layers=8, H=64, W=64,
+                    n_layers=8,
                 ),
             ],
         ),
@@ -1037,7 +1037,7 @@ STANDARD_CURRICULUM = CurriculumSpec(
                     subject="Full world model: all domains integrated, regime state receives gradient from everything",
                     include=["*"],
                     datasets=["yahoo_finance", "fred_macro", "fred_rates", "yahoo_commodities"],
-                    n_layers=12, H=128, W=128, n_steps=10000,
+                    n_layers=12, n_steps=10000,
                 ),
             ],
         ),

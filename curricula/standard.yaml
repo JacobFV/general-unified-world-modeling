@@ -1,8 +1,8 @@
 name: general_unified_world_model
 
+# Canvas dimensions (H, W) are auto-computed from the projected fields.
+# Override per-subject only when you need a specific grid size.
 defaults:
-  H: 48
-  W: 48
   d_model: 64
   n_layers: 6
   n_loops: 3
@@ -35,8 +35,6 @@ stages:
       - subject: "How macroeconomic conditions drive financial markets: GDP to equities, inflation to rates"
         datasets: [fred_macro, fred_rates, yahoo_finance]
         n_layers: 8
-        H: 64
-        W: 64
 
       - subject: "Geopolitical events driving commodity prices: sanctions to oil, trade wars to metals"
         datasets: [yahoo_commodities]
@@ -51,15 +49,11 @@ stages:
         firms: [AAPL, NVDA, MSFT]
         datasets: [yahoo_finance, fred_macro]
         n_layers: 8
-        H: 64
-        W: 64
 
       - subject: "Policy analysis: monetary transmission, fiscal multipliers, regulatory impact on markets"
         countries: [jp, uk]
         datasets: [fred_macro, fred_rates, yahoo_finance]
         n_layers: 8
-        H: 64
-        W: 64
 
   - name: integration
     builds_on: complex_dynamics
@@ -68,6 +62,4 @@ stages:
         include: ["*"]
         datasets: [yahoo_finance, fred_macro, fred_rates, yahoo_commodities]
         n_layers: 12
-        H: 128
-        W: 128
         n_steps: 10000
