@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openenv-corporate-world-env"
+version = "0.1.0"
+description = "Corporate multi-role RL environment backed by a General Unified World Model"
+requires-python = ">=3.10"
+dependencies = [
+    "openenv-core[core]>=0.2.0",
+    "general-unified-world-model>=0.0.3",
+    "torch>=2.0",
+    "numpy>=1.24",
+    "gymnasium>=0.29",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.scripts]
+server = "corporate_world_env.server.app:main"
+
+[tool.setuptools]
+include-package-data = true
+packages = ["corporate_world_env", "corporate_world_env.server"]
+package-dir = { "corporate_world_env" = ".", "corporate_world_env.server" = "server" }
