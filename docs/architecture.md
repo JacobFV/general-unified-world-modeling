@@ -94,16 +94,24 @@ Fields held constant within their period -- a monthly CPI field only updates eve
 Firms, individuals, countries, sectors, and supply chain nodes are created at runtime using `dataclasses.make_dataclass`. This allows projections to include arbitrary named entities without hardcoding them in the schema:
 
 ```python
+from general_unified_world_model.schema.business import Business
+from general_unified_world_model.schema.individual import Individual
+from general_unified_world_model.schema.country import Country
+from general_unified_world_model.schema.sector import Sector
+
 proj = WorldProjection(
     include=["financial", "country_us.macro"],
-    firms=["AAPL", "NVDA"],           # creates firm_AAPL, firm_NVDA
-    individuals=["ceo_cook"],          # creates person_ceo_cook
-    countries=["jp", "uk"],            # creates country_jp, country_uk
-    sectors=["semiconductors"],        # creates sector_semiconductors
+    entities={
+        "firm_AAPL": Business(),       # creates firm_AAPL (57 fields)
+        "firm_NVDA": Business(),       # creates firm_NVDA (57 fields)
+        "person_ceo_cook": Individual(),
+        "country_jp": Country(),
+        "sector_semiconductors": Sector(),
+    },
 )
 ```
 
-Each dynamic entity instantiates a full dataclass (e.g., `Business` has 57 fields for financials, operations, strategy, market position, and risk).
+Each dynamic entity is a full dataclass instance (e.g., `Business` has 57 fields for financials, operations, strategy, market position, and risk). Entity names are arbitrary keys in the `entities` dict.
 
 ## Projection system
 

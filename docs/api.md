@@ -31,19 +31,21 @@ See [Schema Reference](schema.md) for a full breakdown of all 19 layers and 857 
 
 ### `WorldProjection`
 
-Declares which parts of the world schema to include.
+Declares which parts of a schema to include. Uses a unified `entities` dict for dynamic entities (firms, individuals, countries, sectors, supply chain nodes).
 
 ```python
 from general_unified_world_model import WorldProjection
+from general_unified_world_model.schema.business import Business
+from general_unified_world_model.schema.individual import Individual
 
 proj = WorldProjection(
     include=["financial", "country_us.macro", "regime", "forecasts"],
-    exclude=[],                 # optional: paths to exclude
-    firms=["AAPL", "NVDA"],     # dynamic firm entities
-    individuals=["ceo"],        # dynamic individual entities
-    countries=["jp", "uk"],     # additional countries beyond US/CN/EU
-    sectors=["tech"],           # additional GICS sectors
-    supply_chains=[],           # supply chain node IDs
+    exclude=[],
+    entities={
+        "firm_AAPL": Business(),
+        "firm_NVDA": Business(),
+        "person_ceo": Individual(),
+    },
 )
 ```
 
@@ -51,36 +53,55 @@ proj = WorldProjection(
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `include` | `list[str]` | Dotted paths into the World schema to include |
+| `include` | `list[str]` | Dotted paths into the schema to include. `["*"]` = all. |
 | `exclude` | `list[str]` | Paths to exclude (applied after include) |
-| `firms` | `list[str]` | Ticker symbols for dynamic `Business` entities |
-| `individuals` | `list[str]` | IDs for dynamic `Individual` entities |
-| `countries` | `list[str]` | ISO codes for additional `Country` entities |
-| `sectors` | `list[str]` | Names for additional `Sector` entities |
-| `supply_chains` | `list[str]` | IDs for `SupplyChainNode` entities |
+| `entities` | `dict[str, Any]` | Dynamic entities: name -> dataclass instance |
+| `connectivity` | `ConnectivityPolicy \| None` | Override connectivity policy |
+| `temporal_start` | `dict[str, int]` | Entity temporal start indices |
 
 ### `project()`
 
-Compiles a `WorldProjection` into a `BoundSchema`.
+Compiles a schema projection into a `BoundSchema`. Accepts either a schema root directly or a `WorldProjection`.
 
 ```python
-from general_unified_world_model import project
+from general_unified_world_model import World, project
+from general_unified_world_model.schema.business import Business
 
-bound = project(proj, T=1, d_model=64)  # H, W auto-sized
+# Clean API: schema root + include/exclude
+bound = project(World(), include=["financial", "regime"], d_model=64)
+
+# With entities
+bound = project(
+    World(),
+    include=["financial", "country_us.macro"],
+    entities={"firm_AAPL": Business()},
+    d_model=64,
+)
+
+# Default root (World())
+bound = project(include=["regime"], d_model=64)
+
+# Legacy: WorldProjection
+proj = WorldProjection(include=["financial"])
+bound = project(proj, T=1, d_model=64)
 ```
 
 **Parameters:**
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `projection` | `WorldProjection` | The projection to compile |
+| `proj_or_root` | `WorldProjection \| dataclass \| None` | Schema root or projection. None defaults to `World()`. |
+| `include` | `list[str] \| None` | Dotted paths to include. Default `["*"]`. |
+| `exclude` | `list[str] \| None` | Paths to exclude. |
+| `entities` | `dict[str, Any] \| None` | Dynamic entity dict. |
 | `T` | `int` | Temporal dimension (typically 1) |
 | `H` | `int \| None` | Canvas height (None = auto-size) |
 | `W` | `int \| None` | Canvas width (None = auto-size) |
 | `d_model` | `int` | Latent dimension per position |
-| `connectivity` | `ConnectivityPolicy` | Optional connectivity override |
+| `connectivity` | `ConnectivityPolicy \| None` | Connectivity policy override |
+| `t_current` | `int` | Timestep boundary for output mask |
 
-**Returns:** `BoundSchema` with `.field_names`, `.layout`, `.topology`, `.attention_mask`.
+**Returns:** `BoundSchema` with `.field_names`, `.layout`, `.topology`, `.fields`.
 
 ---
 
@@ -88,25 +109,31 @@ bound = project(proj, T=1, d_model=64)  # H, W auto-sized
 
 ### `WorldModel`
 
-High-level inference interface. Load a trained checkpoint, observe known fields, predict the rest.
+General-purpose world model base class. Works with any canvas schema. Holds runtime canvas state and supports dynamic layout/topology changes.
 
 ```python
 from general_unified_world_model import WorldModel
 
-model = WorldModel.load("checkpoint.pt", projection)
+# From a pre-compiled schema (auto-builds backbone/encoder/decoder)
+model = WorldModel(bound_schema, device="cpu")
+
+# From any schema root
+model = WorldModel.from_schema(my_schema, include=["sensor"], d_model=32)
+
+# From checkpoint
+model = WorldModel.load("checkpoint.pt", bound_schema=bound)
 ```
 
-#### `WorldModel.load(path, projection, device="cuda")`
+#### `WorldModel(bound_schema, backbone=None, encoder=None, decoder=None, device, ...)`
 
-Class method. Loads backbone, encoder, and decoder weights from a checkpoint.
+Constructor. When backbone/encoder/decoder are None, they are auto-built from the schema.
 
-#### `WorldModel.observe(field_path, value)`
+#### `WorldModel.observe(field_path, value, t=None)`
 
-Set an observed value for a field.
+Set an observed value. Writes to both the observations dict and the canvas tensor.
 
 ```python
 model.observe("financial.yield_curves.ten_year", 4.25)
-model.observe("country_us.macro.inflation.headline_cpi", 3.1)
 ```
 
 #### `WorldModel.predict(n_steps=50)`
@@ -116,20 +143,108 @@ Run diffusion inference conditioned on observations. Returns a dict mapping fiel
 ```python
 predictions = model.predict(n_steps=50)
 recession_prob = predictions["forecasts.macro.recession_prob_3m"]
-regime = predictions["regime.growth_regime"]
 ```
 
-#### `WorldModel.reset()`
+#### `WorldModel.get_canvas(t=None)`
 
-Clear all observations.
+Get the canvas state tensor. Returns `(1, N, d_model)`.
+
+```python
+canvas = model.get_canvas()       # full canvas
+frame = model.get_canvas(t=0)     # positions at timestep 0
+```
+
+#### `WorldModel.clear_observations()`
+
+Clear all observations and reset canvas to zeros.
+
+#### `WorldModel.resize_layout(H=None, W=None, T=None, d_model=None)`
+
+Change canvas dimensions. Recompiles schema, transfers data by field name, zero-initializes new positions.
+
+```python
+model.resize_layout(H=64, W=64)  # expand canvas
+```
+
+#### `WorldModel.set_topology(topology)`
+
+Change the attention topology. Rebuilds dispatchers in backbone blocks.
+
+```python
+from canvas_engineering import CanvasTopology
+model.set_topology(CanvasTopology.dense(regions))
+```
+
+#### `WorldModel.add_region(name, spec)` / `WorldModel.remove_region(name)`
+
+Dynamic region management. New regions are zero-initialized.
+
+#### `WorldModel.ingest(data, spec)`
+
+Populate canvas from a data dict using a DatasetSpec.
+
+```python
+model.ingest({"gdp": 2.1, "cpi": 3.4}, spec=fred_spec)
+```
+
+#### `WorldModel.from_schema(schema_root, include, exclude, entities, ...)`
+
+Class method. Create a WorldModel from any dataclass schema root.
+
+#### `WorldModel.save(path)` / `WorldModel.load(path, ...)`
+
+Save/load checkpoints (backbone, encoder, decoder, canvas state, observations).
+
+---
+
+### `GeneralUnifiedWorldModel`
+
+Convenience subclass of `WorldModel` with the built-in 857-field `World()` schema.
+
+```python
+from general_unified_world_model import GeneralUnifiedWorldModel
+from general_unified_world_model.schema.business import Business
+
+model = GeneralUnifiedWorldModel(
+    include=["financial", "country_us.macro", "regime", "forecasts"],
+    entities={"firm_AAPL": Business()},
+    d_model=64,
+)
+
+model.observe("financial.yield_curves.ten_year", 4.25)
+predictions = model.predict()
+```
+
+#### Constructor
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `include` | `list[str] \| None` | Schema paths to include. Default: all 857 fields. |
+| `exclude` | `list[str] \| None` | Paths to exclude. |
+| `entities` | `dict[str, Any] \| None` | Dynamic entities. |
+| `T` | `int` | Temporal extent. |
+| `H`, `W` | `int \| None` | Canvas size. None = auto-sized. |
+| `d_model` | `int` | Latent dimension. |
+| `device` | `str` | Device. |
+| `n_layers` | `int` | Backbone depth (default 6). |
+| `n_loops` | `int` | Looped attention iterations (default 3). |
+| `dataset_specs` | `list[DatasetSpec] \| None` | Pre-registered dataset specs. |
+
+#### `GeneralUnifiedWorldModel.project_subset(include, exclude, entities)`
+
+Create a new `GeneralUnifiedWorldModel` from a subset of the current model's fields.
+
+#### `GeneralUnifiedWorldModel.load(path, include, exclude, ...)`
+
+Load from checkpoint with simplified signature (no WorldProjection needed).
 
 ---
 
 ## Training
 
-### `build_world_model(bound, n_layers, n_heads, d_ff, n_loops)`
+### `build_world_model(bound, n_layers, n_heads, d_ff, n_loops, use_dispatch)`
 
-Build a `WorldModelBackbone` transformer from scratch for a given `BoundSchema`.
+Build a `WorldModelBackbone` transformer for a given `BoundSchema`. When `use_dispatch=True` (default), uses per-connection attention dispatch — each connection uses its declared attention function type.
 
 ```python
 from general_unified_world_model import build_world_model
@@ -225,32 +340,9 @@ spec = DatasetSpec(
 
 Create a dataloader that interleaves multiple heterogeneous data sources.
 
-```python
-from general_unified_world_model import build_mixed_dataloader
-
-loader = build_mixed_dataloader(
-    bound,
-    sources=[(fred_spec, fred_data), (yahoo_spec, yahoo_data)],
-    batch_size=32,
-)
-```
-
 ### `MaskedCanvasTrainer`
 
 Training loop with masked loss over canvas positions.
-
-```python
-from general_unified_world_model import MaskedCanvasTrainer
-
-trainer = MaskedCanvasTrainer(
-    bound_schema=bound,
-    backbone=backbone,
-    encoder=encoder,
-    decoder=decoder,
-    optimizer=optimizer,
-)
-trainer.train(dataloader, n_steps=10000)
-```
 
 ### `DAGCurriculumTrainer`
 
@@ -262,8 +354,7 @@ from general_unified_world_model import DAGCurriculumTrainer
 trainer = DAGCurriculumTrainer(
     nodes=dag,
     data_sources=data_sources,
-    backbone="cogvideox",                      # or "scratch"
-    pretrained_model_id="THUDM/CogVideoX-2b",  # for cogvideox
+    backbone="cogvideox",
     device="cuda",
 )
 trainer.run()
@@ -272,16 +363,6 @@ trainer.run()
 ### `build_curriculum()` / `DatasetProfile`
 
 LLM-driven curriculum design. Examines datasets and generates an optimal training schedule.
-
-```python
-from general_unified_world_model import build_curriculum, DatasetProfile
-
-curriculum = build_curriculum(
-    goal="Learn financial risk dynamics",
-    datasets=[DatasetProfile(name="FRED", ...)],
-)
-nodes = curriculum.to_training_nodes()
-```
 
 ### `CurriculumTrainer` / `CurriculumConfig`
 
@@ -315,14 +396,6 @@ mask = tt.generate_temporal_attention_mask((0, 1000), bound_schema)
 
 Convenience function for visualization. Requires `pip install general-unified-world-model[viz]`.
 
-```python
-from general_unified_world_model import render
-
-fig = render(bound, "canvas_heatmap")
-fig = render(bound, "topology_graph")
-render(bound, "canvas_heatmap", save_path="output.png")
-```
-
 Available renderers: `canvas_heatmap`, `topology_graph`, `financial_chart`, `geopolitical_map`, `regime_dashboard`, `social_graph`.
 
 ---
@@ -343,15 +416,13 @@ result = llm_project(
 bound = result.compile(T=1, d_model=64)
 ```
 
-**Returns:** object with `.projection`, `.reasoning`, `.compile()` method.
-
 ---
 
 ## Transfer distance
 
 ### `TransferDistanceEstimator`
 
-Estimates generalization distance between projections using semantic embedding similarity. Used by the curriculum to decide domain coupling order.
+Estimates generalization distance between projections using semantic embedding similarity.
 
 ```python
 from general_unified_world_model import TransferDistanceEstimator

@@ -42,9 +42,11 @@ print(f"{len(bound.topology.connections)} connections")
 ### Project for a hedge fund
 
 ```python
-from general_unified_world_model import WorldProjection, project
+from general_unified_world_model import World, project
+from general_unified_world_model.schema.business import Business
 
-proj = WorldProjection(
+bound = project(
+    World(),
     include=[
         "financial",
         "country_us.macro",
@@ -52,10 +54,9 @@ proj = WorldProjection(
         "forecasts.macro",
         "forecasts.financial",
     ],
-    firms=["AAPL", "NVDA"],
+    entities={"firm_AAPL": Business(), "firm_NVDA": Business()},
+    d_model=64,  # H, W auto-sized
 )
-
-bound = project(proj, T=1, d_model=64)  # H, W auto-sized
 ```
 
 <figure markdown>
@@ -67,13 +68,12 @@ bound = project(proj, T=1, d_model=64)  # H, W auto-sized
 
 ```python
 from general_unified_world_model import (
-    project, WorldProjection, build_world_model,
+    World, project, build_world_model,
     FieldEncoder, FieldDecoder, MaskedCanvasTrainer,
     DatasetSpec, InputSpec, OutputSpec, build_mixed_dataloader,
 )
 
-proj = WorldProjection(include=["financial", "country_us.macro", "regime"])
-bound = project(proj, T=1, d_model=64)
+bound = project(World(), include=["financial", "country_us.macro", "regime"], d_model=64)
 
 backbone = build_world_model(bound, n_layers=4, n_heads=4, d_ff=256, n_loops=3)
 encoder = FieldEncoder(bound)
@@ -127,17 +127,24 @@ trainer.run()
 
 [:octicons-code-16: Source: examples/06_curriculum_training.py](https://github.com/JacobFV/general-unified-world-modeling/blob/develop/examples/06_curriculum_training.py){ .md-button }
 
-### Inference
+### Inference with GeneralUnifiedWorldModel
 
 ```python
-from general_unified_world_model import WorldModel
+from general_unified_world_model import GeneralUnifiedWorldModel
 
-model = WorldModel.load("checkpoint.pt", projection)
+# No checkpoint needed for schema compilation and observation
+model = GeneralUnifiedWorldModel(
+    include=["financial", "country_us.macro", "regime", "forecasts"],
+    d_model=64,
+)
 model.observe("financial.yield_curves.ten_year", 4.25)
 model.observe("country_us.macro.inflation.headline_cpi", 3.1)
 
-predictions = model.predict(n_steps=50)
-print(predictions["forecasts.macro.recession_prob_3m"])
+# Get canvas state directly
+canvas = model.get_canvas()
+
+# Or run diffusion inference (requires trained weights)
+# predictions = model.predict(n_steps=50)
 ```
 
 !!! warning "Coming soon"

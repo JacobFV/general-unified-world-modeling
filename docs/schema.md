@@ -797,7 +797,7 @@ graph TD
     end
 ```
 
-**Why this decomposition?** Sectors are the natural unit of equity analysis. Demand/supply/profitability captures the operating leverage cycle. Structural fields (disruption risk, concentration) drive long-run sector returns. Each sector is a dynamic entity — instantiate `sectors=["tech", "energy"]` to add sector-level analysis to a projection.
+**Why this decomposition?** Sectors are the natural unit of equity analysis. Demand/supply/profitability captures the operating leverage cycle. Structural fields (disruption risk, concentration) drive long-run sector returns. Each sector is a dynamic entity — add `entities={"sector_tech": Sector(), "sector_energy": Sector()}` to include sector-level analysis in a projection.
 
 ---
 

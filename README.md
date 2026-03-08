@@ -65,10 +65,12 @@ print(f"{len(bound.field_names)} fields, "
 You don't need the full 857-field model. Declare what you care about:
 
 ```python
-from general_unified_world_model import WorldProjection, project
+from general_unified_world_model import World, project
+from general_unified_world_model.schema.business import Business
 
 # Hedge fund: macro + financial + two firms
-proj = WorldProjection(
+bound = project(
+    World(),
     include=[
         "financial",
         "country_us.macro",
@@ -76,10 +78,9 @@ proj = WorldProjection(
         "forecasts.macro",
         "forecasts.financial",
     ],
-    firms=["AAPL", "NVDA"],
+    entities={"firm_AAPL": Business(), "firm_NVDA": Business()},
+    d_model=64,
 )
-
-bound = project(proj, T=1, H=64, W=64, d_model=64)
 # ~200 fields, focused on what matters
 ```
 
@@ -181,7 +182,11 @@ loader = build_mixed_dataloader(
 ### CEO: "Model my company in context"
 
 ```python
-proj = WorldProjection(
+from general_unified_world_model.schema.business import Business
+from general_unified_world_model.schema.individual import Individual
+
+bound = project(
+    World(),
     include=[
         "country_us.macro",
         "sector_tech",
@@ -190,8 +195,14 @@ proj = WorldProjection(
         "regime",
         "forecasts",
     ],
-    firms=["ACME", "RIVAL"],
-    individuals=["ceo", "cfo", "cto"],
+    entities={
+        "firm_ACME": Business(),
+        "firm_RIVAL": Business(),
+        "person_ceo": Individual(),
+        "person_cfo": Individual(),
+        "person_cto": Individual(),
+    },
+    d_model=64,
 )
 ```
 
@@ -204,7 +215,10 @@ proj = WorldProjection(
 ### Government: "Model policy impact"
 
 ```python
-proj = WorldProjection(
+from general_unified_world_model.schema.country import Country
+
+bound = project(
+    World(),
     include=[
         "country_us",
         "country_cn.macro",
@@ -214,7 +228,8 @@ proj = WorldProjection(
         "forecasts",
         "regime",
     ],
-    countries=["jp", "uk"],
+    entities={"country_jp": Country(), "country_uk": Country()},
+    d_model=64,
 )
 ```
 
@@ -227,14 +242,18 @@ proj = WorldProjection(
 ### Computer use agent: "Model the user's world"
 
 ```python
-proj = WorldProjection(
+from general_unified_world_model.schema.individual import Individual
+from general_unified_world_model.schema.business import Business
+
+bound = project(
+    World(),
     include=[
         "events",
         "regime.compressed_world_state",
         "forecasts.macro.recession_prob_3m",
     ],
-    individuals=["user"],
-    firms=["user_org"],
+    entities={"person_user": Individual(), "firm_user_org": Business()},
+    d_model=64,
 )
 ```
 
@@ -306,7 +325,6 @@ spec = CurriculumSpec(stages=[
         CurriculumSubject(
             subject="How semiconductor supply chains affect tech stock valuations",
             datasets=["yahoo_finance"],
-            firms=["NVDA", "TSMC"],
         ),
     ]),
 ])

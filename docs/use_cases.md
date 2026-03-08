@@ -16,9 +16,11 @@ A hedge fund PM needs to understand recession risk, rate paths, and equity expos
 </figure>
 
 ```python
-from general_unified_world_model import WorldProjection, project, WorldModel
+from general_unified_world_model import World, project
+from general_unified_world_model.schema.business import Business
 
-proj = WorldProjection(
+bound = project(
+    World(),
     include=[
         "financial",               # yields, credit, FX, equities, crypto
         "country_us.macro",        # GDP, inflation, labor, housing
@@ -26,9 +28,13 @@ proj = WorldProjection(
         "forecasts.macro",         # recession probability
         "forecasts.financial",     # credit stress, rate path
     ],
-    firms=["AAPL", "NVDA", "JPM"],
+    entities={
+        "firm_AAPL": Business(),
+        "firm_NVDA": Business(),
+        "firm_JPM": Business(),
+    },
+    d_model=64,
 )
-bound = project(proj, T=1, d_model=64)
 ```
 
 <figure markdown>
@@ -95,7 +101,11 @@ A commodities trader needs to understand how geopolitical tensions affect energy
 </figure>
 
 ```python
-proj = WorldProjection(
+from general_unified_world_model import World, project
+from general_unified_world_model.schema.country import Country
+
+bound = project(
+    World(),
     include=[
         "resources",                    # energy, metals, agriculture
         "country_us.politics",          # US policy stance
@@ -104,9 +114,12 @@ proj = WorldProjection(
         "regime",                       # global regime state
         "forecasts.geopolitical",       # conflict risk
     ],
-    countries=["ru", "sa"],             # Russia, Saudi Arabia
+    entities={
+        "country_ru": Country(),        # Russia
+        "country_sa": Country(),        # Saudi Arabia
+    },
+    d_model=64,
 )
-bound = project(proj, T=1, d_model=64)
 ```
 
 <figure markdown>
@@ -135,7 +148,12 @@ A CEO needs to understand how macro conditions and competitor moves affect their
 </figure>
 
 ```python
-proj = WorldProjection(
+from general_unified_world_model import World, project
+from general_unified_world_model.schema.business import Business
+from general_unified_world_model.schema.individual import Individual
+
+bound = project(
+    World(),
     include=[
         "financial.equities",
         "country_us.macro",
@@ -143,10 +161,15 @@ proj = WorldProjection(
         "forecasts.business",
         "narratives.elites",
     ],
-    firms=["ACME", "RIVAL"],
-    individuals=["ceo", "cfo", "board_chair"],
+    entities={
+        "firm_ACME": Business(),
+        "firm_RIVAL": Business(),
+        "person_ceo": Individual(),
+        "person_cfo": Individual(),
+        "person_board_chair": Individual(),
+    },
+    d_model=64,
 )
-bound = project(proj, T=1, d_model=64)
 ```
 
 <figure markdown>
@@ -174,7 +197,11 @@ A central bank economist needs to understand how monetary policy transmits throu
 </figure>
 
 ```python
-proj = WorldProjection(
+from general_unified_world_model import World, project
+from general_unified_world_model.schema.country import Country
+
+bound = project(
+    World(),
     include=[
         "country_us",               # full US: macro + politics
         "financial",                 # markets respond to policy
@@ -182,9 +209,14 @@ proj = WorldProjection(
         "regime",
         "forecasts",
     ],
-    countries=["cn", "eu", "jp", "uk"],
+    entities={
+        "country_cn_extra": Country(),
+        "country_eu_extra": Country(),
+        "country_jp": Country(),
+        "country_uk": Country(),
+    },
+    d_model=128,
 )
-bound = project(proj, T=1, d_model=128)
 ```
 
 ```mermaid
@@ -241,7 +273,9 @@ An AI agent operating in the real world needs a compressed understanding of "wha
 </figure>
 
 ```python
-proj = WorldProjection(
+from general_unified_world_model import GeneralUnifiedWorldModel
+
+model = GeneralUnifiedWorldModel(
     include=[
         "narratives",          # what people are saying
         "events",              # what just happened
@@ -249,11 +283,10 @@ proj = WorldProjection(
         "technology",          # tech frontier
         "forecasts",           # where things are heading
     ],
+    d_model=64,
 )
-bound = project(proj, T=1, d_model=64)
 
 # The agent queries the world model as context
-model = WorldModel.load("checkpoint.pt", proj)
 model.observe("events.news_embedding", latest_news_embedding)
 context = model.predict()
 # context["regime.growth_regime"] -> "expansion"

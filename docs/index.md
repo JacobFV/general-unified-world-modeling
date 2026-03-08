@@ -60,25 +60,36 @@ graph LR
 ## 30-second quickstart
 
 ```python
-from general_unified_world_model import World, WorldProjection, project
+from general_unified_world_model import GeneralUnifiedWorldModel
 
-# Project to just what you need
-proj = WorldProjection(
+# Create a world model for the domains you care about
+model = GeneralUnifiedWorldModel(
     include=["financial", "country_us.macro", "regime", "forecasts"],
-    firms=["AAPL", "NVDA"],
+    d_model=64,
 )
-bound = project(proj, T=1, d_model=64)  # auto-sizes canvas
 
-# Train on real data
-from general_unified_world_model.data.adapters import yahoo_finance_adapter
-yahoo_spec, yahoo_data = yahoo_finance_adapter(start_date="2010-01-01")
-
-# Inference
-from general_unified_world_model import WorldModel
-model = WorldModel.load("checkpoint.pt", proj)
+# Observe known values
 model.observe("financial.yield_curves.ten_year", 4.25)
+model.observe("country_us.macro.inflation.headline_cpi", 3.1)
+
+# Predict everything else
 predictions = model.predict()
 print(predictions["forecasts.macro.recession_prob_3m"])
+```
+
+Or use the functional API for more control:
+
+```python
+from general_unified_world_model import World, project
+from general_unified_world_model.schema.business import Business
+
+# project() accepts a schema root directly
+bound = project(
+    World(),
+    include=["financial", "country_us.macro", "regime"],
+    entities={"firm_AAPL": Business(), "firm_NVDA": Business()},
+    d_model=64,
+)
 ```
 
 ## Visualizations
@@ -108,21 +119,30 @@ print(predictions["forecasts.macro.recession_prob_3m"])
 
 | Layer | Fields | Frequency | What it models |
 |-------|--------|-----------|----------------|
-| Physical | climate, infrastructure, disasters | Annual+ | Planetary boundary conditions |
-| Resources | energy, metals, food, water, compute | Hourly--Monthly | Supply/demand/price for commodities |
-| Financial | yields, credit, FX, equities, crypto | Sub-minute--Daily | Market prices and risk metrics |
-| Country | macro + politics per country | Weekly--Quarterly | GDP, inflation, labor, governance |
-| Narratives | media sentiment, positioning | Sub-minute--Monthly | What people believe and how they're positioned |
-| Technology | AI, biotech, quantum, robotics | Quarterly+ | Innovation frontier and diffusion |
-| Demographics | population, dependency, urbanization | Multi-year | Slow structural shifts |
-| Sector | per-GICS sector dynamics | Monthly--Quarterly | Industry supply/demand/margins |
-| Firm | financials, operations, strategy | Quarterly | Company-level data |
-| Individual | cognitive state, incentives, network | Daily--Quarterly | Decision-maker modeling |
-| Events | news, filings, policy announcements | Sub-minute | Discrete happenings |
-| Trust | epistemic calibration | Quarterly+ | Data source reliability |
-| Regime | compressed global latent | Quarterly+ | World "mode" (growth, crisis, transition) |
-| Interventions | monetary, fiscal, regulatory | Monthly+ | Policy actions and their effects |
-| Forecasts | recession prob, credit stress, conflict | Output | Predictive output fields |
+| Physical | 17 | Annual+ | Climate, disasters, geographic infrastructure |
+| Resources | 45 | Hourly--Monthly | Energy, metals, food, water, compute |
+| Financial | 68 | Sub-minute--Daily | Yields, credit, FX, equities, crypto, liquidity |
+| Macro | 67/country | Weekly--Quarterly | GDP, inflation, labor, fiscal, trade, housing |
+| Political | 42/country | Monthly--Multi-year | Executive, legislative, geopolitical, institutions |
+| Narratives | 35 | Sub-minute--Monthly | Media, sentiment, elite consensus, positioning |
+| Technology | 13 | Quarterly+ | AI, biotech, quantum, robotics, productivity |
+| Biology | 16 | Weekly--Annual | Ecosystems, disease, agricultural biology |
+| Infrastructure | 27 | Hourly--Annual | Power grids, transport, telecoms, urban systems |
+| Cyber | 11 | Daily--Quarterly | Threat landscape, digital ecosystem |
+| Space | 9 | Weekly--Annual | Orbital environment, space economy |
+| Health | 10 | Weekly--Annual | Healthcare capacity, public health |
+| Education | 11 | Monthly--Annual | Education systems, workforce development |
+| Demographics | 10/country | Multi-year | Population, dependency, urbanization |
+| Legal | 11 | Quarterly--Annual | Regulatory environment, rule of law |
+| Sector | 19/sector | Weekly--Quarterly | Per-GICS demand, supply, profitability |
+| Supply Chain | 9/node | Daily--Monthly | Bottleneck concentration, fragility |
+| Business | 57/firm | Daily--Quarterly | Financials, operations, strategy, risk |
+| Individual | 27/person | Daily--Quarterly | Cognition, incentives, network, state |
+| Events | 10 | Sub-minute | News, filings, policy, conflict, disaster |
+| Trust | 17 | Weekly--Quarterly | Data source reliability, epistemic state |
+| Regime | 17 | Weekly--Decadal | Compressed world state, systemic risk |
+| Interventions | 13 | Weekly--Quarterly | Policy actions, counterfactual effects |
+| Forecasts | 32 | Output | Recession prob, credit stress, conflict |
 
 See the full [Schema Reference](schema.md) for mermaid diagrams, field listings, and design rationale for every layer.
 
@@ -131,6 +151,6 @@ See the full [Schema Reference](schema.md) for mermaid diagrams, field listings,
 !!! warning "Coming soon"
     The world model is under active development. The schema, projection system, training pipeline, and CogVideoX backbone are implemented and tested. Large-scale training on real data is in progress on H100 GPUs. Trained checkpoints and inference API are coming soon.
 
-    **What works today**: Schema compilation, projection, data adapters, heterogeneous training with masked loss, DAG curriculum, CogVideoX grafting, LLM-driven curriculum design.
+    **What works today**: Schema compilation, projection, data adapters, heterogeneous training with masked loss, DAG curriculum, CogVideoX grafting, LLM-driven curriculum design, per-connection attention dispatch (17 attention types), dynamic layout/topology changes.
 
-    **Coming soon**: Pretrained checkpoint release, inference API, real-time data ingestion, hosted API.
+    **Coming soon**: Pretrained checkpoint release, real-time data ingestion, hosted API.
