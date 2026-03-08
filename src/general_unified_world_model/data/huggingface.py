@@ -31,7 +31,7 @@ from typing import Optional
 import numpy as np
 import torch
 
-from general_unified_world_model.training.heterogeneous import DatasetSpec, FieldMapping
+from general_unified_world_model.training.heterogeneous import DatasetSpec, InputSpec, OutputSpec, _infer_semantic_type
 from general_unified_world_model.data.adapters import (
     z_score, minmax, log_return, pct_change, rank_normalize,
 )
@@ -290,7 +290,7 @@ def hf_adapter(
 
     Example:
         >>> spec, data = hf_adapter("fred-economic-data/FRED-MD")
-        >>> print(f"{spec.name}: {len(spec.mappings)} fields mapped")
+        >>> print(f"{spec.name}: {len(spec.input_specs)} fields mapped")
     """
     try:
         from datasets import load_dataset
@@ -336,7 +336,7 @@ def hf_adapter(
     if max_rows is not None and len(ds) > max_rows:
         ds = ds.select(range(max_rows))
 
-    mappings = []
+    input_specs, output_specs = [], []
     data_dict = {}
     mapped_targets = set()  # avoid duplicate field mappings
 
@@ -400,24 +400,23 @@ def hf_adapter(
         source_key = f"hf_{col}"
         data_dict[source_key] = tensor
 
-        mappings.append(FieldMapping(
-            source_key=source_key,
-            target_field=target,
-            transform=transform,
-            frequency=freq,
-        ))
+        st = _infer_semantic_type(target)
+        input_specs.append(InputSpec(key=source_key, semantic_type=st, field_path=target, transform=transform, frequency=freq))
+        output_specs.append(OutputSpec(key=source_key, semantic_type=st, field_path=target, frequency=freq))
         logger.info(f"Mapped '{col}' → {target} (transform={transform_name}, freq={freq})")
 
     spec = DatasetSpec(
         name=f"HuggingFace/{dataset_name}",
-        mappings=mappings,
+        description=f"HuggingFace dataset: {dataset_name}",
+        input_specs=input_specs,
+        output_specs=output_specs,
         base_period=inferred_freq,
         weight=weight,
     )
 
     n_total = len([c for c in columns if c.lower().strip() not in exclude_columns])
     logger.info(
-        f"HuggingFace adapter: {len(mappings)}/{n_total} columns mapped "
+        f"HuggingFace adapter: {len(input_specs)}/{n_total} columns mapped "
         f"from '{dataset_name}' (domains: {inferred_domains})"
     )
 

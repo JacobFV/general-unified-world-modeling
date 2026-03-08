@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from general_unified_world_model.training.heterogeneous import DatasetSpec, FieldMapping
+from general_unified_world_model.training.heterogeneous import DatasetSpec, InputSpec, OutputSpec, _infer_semantic_type
 from general_unified_world_model.data.adapters import (
     z_score,
     minmax,
@@ -41,6 +41,16 @@ from general_unified_world_model.schema.temporal_constants import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _io_pair(key: str, field_path: str, transform=None, frequency=None):
+    """Create matched InputSpec + OutputSpec for a field mapping."""
+    st = _infer_semantic_type(field_path)
+    return (
+        InputSpec(key=key, semantic_type=st, field_path=field_path, transform=transform, frequency=frequency),
+        OutputSpec(key=key, semantic_type=st, field_path=field_path, frequency=frequency),
+    )
+
 
 # ── Default cache directory ──────────────────────────────────────────────
 
@@ -125,7 +135,7 @@ class BaseCollector(ABC):
             spec, data = self._fetch()
         except Exception as exc:
             logger.warning("[%s] Failed to fetch data: %s", self.name, exc)
-            spec = DatasetSpec(name=self.name, mappings=[])
+            spec = DatasetSpec(name=self.name)
             data = {}
             return spec, data
 
@@ -135,8 +145,8 @@ class BaseCollector(ABC):
             except Exception as exc:
                 logger.warning("[%s] Failed to cache data: %s", self.name, exc)
 
-        logger.info("[%s] Collected %d series, %d field mappings",
-                     self.name, len(data), len(spec.mappings))
+        logger.info("[%s] Collected %d series, %d input specs",
+                     self.name, len(data), len(spec.input_specs))
         return spec, data
 
 
@@ -239,11 +249,11 @@ class FREDCollector(BaseCollector):
             from fredapi import Fred
         except ImportError:
             logger.warning("fredapi not installed. Install with: pip install fredapi")
-            return DatasetSpec(name=self.name, mappings=[]), {}
+            return DatasetSpec(name=self.name), {}
 
         if not self.api_key:
             logger.warning("No FRED API key. Set FRED_API_KEY env var or pass api_key.")
-            return DatasetSpec(name=self.name, mappings=[]), {}
+            return DatasetSpec(name=self.name), {}
 
         fred = Fred(api_key=self.api_key)
 
@@ -256,7 +266,8 @@ class FREDCollector(BaseCollector):
         else:
             target_series = list(all_mappings.keys())
 
-        field_mappings: list[FieldMapping] = []
+        input_specs: list[InputSpec] = []
+        output_specs: list[OutputSpec] = []
         data_dict: dict[str, torch.Tensor] = {}
 
         for sid in target_series:
@@ -290,12 +301,9 @@ class FREDCollector(BaseCollector):
 
                 data_dict[sid] = normalized
 
-                field_mappings.append(FieldMapping(
-                    source_key=sid,
-                    target_field=target_field,
-                    transform=transform_fn,
-                    frequency=period,
-                ))
+                inp, out = _io_pair(sid, target_field, transform=transform_fn, frequency=period)
+                input_specs.append(inp)
+                output_specs.append(out)
 
             except Exception as exc:
                 logger.debug("[FRED] Failed to fetch %s: %s", sid, exc)
@@ -303,7 +311,8 @@ class FREDCollector(BaseCollector):
 
         spec = DatasetSpec(
             name="FRED",
-            mappings=field_mappings,
+            input_specs=input_specs,
+            output_specs=output_specs,
             base_period=TICK,
             weight=1.0,
         )
@@ -370,7 +379,7 @@ class YahooFinanceCollector(BaseCollector):
             import yfinance as yf
         except ImportError:
             logger.warning("yfinance not installed. Install with: pip install yfinance")
-            return DatasetSpec(name=self.name, mappings=[]), {}
+            return DatasetSpec(name=self.name), {}
 
         # Build ticker -> (field_path, sub_idx) map
         all_fields: dict[str, tuple[str, int | None]] = {}
@@ -393,7 +402,7 @@ class YahooFinanceCollector(BaseCollector):
 
         ticker_list = list(all_fields.keys())
         if not ticker_list:
-            return DatasetSpec(name=self.name, mappings=[]), {}
+            return DatasetSpec(name=self.name), {}
 
         # Download all tickers at once
         logger.info("[YahooFinance] Downloading %d tickers...", len(ticker_list))
@@ -407,13 +416,14 @@ class YahooFinanceCollector(BaseCollector):
             )
         except Exception as exc:
             logger.warning("[YahooFinance] Download failed: %s", exc)
-            return DatasetSpec(name=self.name, mappings=[]), {}
+            return DatasetSpec(name=self.name), {}
 
         if data.empty:
             logger.warning("[YahooFinance] Downloaded data is empty")
-            return DatasetSpec(name=self.name, mappings=[]), {}
+            return DatasetSpec(name=self.name), {}
 
-        field_mappings: list[FieldMapping] = []
+        input_specs: list[InputSpec] = []
+        output_specs: list[OutputSpec] = []
         data_dict: dict[str, torch.Tensor] = {}
 
         for ticker in ticker_list:
@@ -443,12 +453,9 @@ class YahooFinanceCollector(BaseCollector):
                 key = f"yahoo_{ticker}"
                 data_dict[key] = normalized
 
-                field_mappings.append(FieldMapping(
-                    source_key=key,
-                    target_field=target_field,
-                    transform=None,  # already normalized
-                    frequency=TICK,     # daily
-                ))
+                inp, out = _io_pair(key, target_field, transform=None, frequency=TICK)
+                input_specs.append(inp)
+                output_specs.append(out)
 
                 logger.debug("[YahooFinance] %s -> %s (%d points)",
                              ticker, target_field, len(normalized))
@@ -459,7 +466,8 @@ class YahooFinanceCollector(BaseCollector):
 
         spec = DatasetSpec(
             name="Yahoo Finance",
-            mappings=field_mappings,
+            input_specs=input_specs,
+            output_specs=output_specs,
             base_period=DAILY,   # daily = period 16 in base ticks
             weight=1.0,
         )
@@ -693,20 +701,19 @@ class SyntheticCollector(BaseCollector):
             all_data.update(group_data)
             all_field_info.extend(fields)
 
-        # Build field mappings -- source_key == target_field for synthetic
-        field_mappings = []
+        # Build input/output specs -- source_key == target_field for synthetic
+        input_specs: list[InputSpec] = []
+        output_specs: list[OutputSpec] = []
         for field_path, period in all_field_info:
             if field_path in all_data:
-                field_mappings.append(FieldMapping(
-                    source_key=field_path,
-                    target_field=field_path,
-                    transform=None,  # already z-scored
-                    frequency=period,
-                ))
+                inp, out = _io_pair(field_path, field_path, transform=None, frequency=period)
+                input_specs.append(inp)
+                output_specs.append(out)
 
         spec = DatasetSpec(
             name="Synthetic",
-            mappings=field_mappings,
+            input_specs=input_specs,
+            output_specs=output_specs,
             base_period=TICK,
             weight=0.5,  # lower weight -- it's synthetic
         )
@@ -791,9 +798,10 @@ class WorldBankCollector(BaseCollector):
             import requests
         except ImportError:
             logger.warning("requests not installed. Install with: pip install requests")
-            return DatasetSpec(name=self.name, mappings=[]), {}
+            return DatasetSpec(name=self.name), {}
 
-        field_mappings: list[FieldMapping] = []
+        input_specs: list[InputSpec] = []
+        output_specs: list[OutputSpec] = []
         data_dict: dict[str, torch.Tensor] = {}
 
         date_range = f"{self.start_year}:{self.end_year or 2026}"
@@ -848,12 +856,9 @@ class WorldBankCollector(BaseCollector):
                     normalized, _, _ = _zscore_tensor(raw)
 
                     data_dict[source_key] = normalized
-                    field_mappings.append(FieldMapping(
-                        source_key=source_key,
-                        target_field=target_field,
-                        transform=None,
-                        frequency=frequency,
-                    ))
+                    inp, out = _io_pair(source_key, target_field, transform=None, frequency=frequency)
+                    input_specs.append(inp)
+                    output_specs.append(out)
 
                     logger.debug(
                         "[WorldBank] %s -> %s (%d points)",
@@ -869,7 +874,8 @@ class WorldBankCollector(BaseCollector):
 
         spec = DatasetSpec(
             name="World Bank",
-            mappings=field_mappings,
+            input_specs=input_specs,
+            output_specs=output_specs,
             base_period=ANNUAL,
             weight=0.8,
         )
@@ -928,16 +934,17 @@ class NOAAClimateCollector(BaseCollector):
             import requests
         except ImportError:
             logger.warning("requests not installed. Install with: pip install requests")
-            return DatasetSpec(name=self.name, mappings=[]), {}
+            return DatasetSpec(name=self.name), {}
 
         if not self.api_key:
             logger.warning(
                 "No NOAA API key. Set NOAA_API_KEY env var or pass api_key. "
                 "Get a free key at https://www.ncdc.noaa.gov/cdo-web/token"
             )
-            return DatasetSpec(name=self.name, mappings=[]), {}
+            return DatasetSpec(name=self.name), {}
 
-        field_mappings: list[FieldMapping] = []
+        input_specs: list[InputSpec] = []
+        output_specs: list[OutputSpec] = []
         data_dict: dict[str, torch.Tensor] = {}
 
         headers = {"token": self.api_key}
@@ -993,12 +1000,9 @@ class NOAAClimateCollector(BaseCollector):
                 normalized, _, _ = _zscore_tensor(raw)
 
                 data_dict[source_key] = normalized
-                field_mappings.append(FieldMapping(
-                    source_key=source_key,
-                    target_field=target_field,
-                    transform=None,
-                    frequency=frequency,
-                ))
+                inp, out = _io_pair(source_key, target_field, transform=None, frequency=frequency)
+                input_specs.append(inp)
+                output_specs.append(out)
 
                 logger.debug(
                     "[NOAA] %s -> %s (%d points)",
@@ -1015,12 +1019,13 @@ class NOAAClimateCollector(BaseCollector):
         # NOAA sources (these use different endpoints and need no CDO key,
         # but we attempt them only when the CDO key is valid to keep the
         # collector consistent).
-        self._fetch_co2(data_dict, field_mappings)
-        self._fetch_sea_level(data_dict, field_mappings)
+        self._fetch_co2(data_dict, input_specs, output_specs)
+        self._fetch_sea_level(data_dict, input_specs, output_specs)
 
         spec = DatasetSpec(
             name="NOAA Climate",
-            mappings=field_mappings,
+            input_specs=input_specs,
+            output_specs=output_specs,
             base_period=ANNUAL,
             weight=0.6,
         )
@@ -1030,7 +1035,8 @@ class NOAAClimateCollector(BaseCollector):
     def _fetch_co2(
         self,
         data_dict: dict[str, torch.Tensor],
-        field_mappings: list[FieldMapping],
+        input_specs: list[InputSpec],
+        output_specs: list[OutputSpec],
     ) -> None:
         """Fetch Mauna Loa CO2 data from NOAA GML (public, no key)."""
         try:
@@ -1063,12 +1069,9 @@ class NOAAClimateCollector(BaseCollector):
                 raw = torch.tensor(values, dtype=torch.float32)
                 normalized, _, _ = _zscore_tensor(raw)
                 data_dict["noaa_co2_annual"] = normalized
-                field_mappings.append(FieldMapping(
-                    source_key="noaa_co2_annual",
-                    target_field="physical.climate.carbon_ppm",
-                    transform=None,
-                    frequency=ANNUAL,
-                ))
+                inp, out = _io_pair("noaa_co2_annual", "physical.climate.carbon_ppm", transform=None, frequency=ANNUAL)
+                input_specs.append(inp)
+                output_specs.append(out)
                 logger.debug("[NOAA] CO2 annual: %d points", len(normalized))
 
         except Exception as exc:
@@ -1077,7 +1080,8 @@ class NOAAClimateCollector(BaseCollector):
     def _fetch_sea_level(
         self,
         data_dict: dict[str, torch.Tensor],
-        field_mappings: list[FieldMapping],
+        input_specs: list[InputSpec],
+        output_specs: list[OutputSpec],
     ) -> None:
         """Fetch global mean sea level data from NOAA (public, no key)."""
         try:
@@ -1116,12 +1120,9 @@ class NOAAClimateCollector(BaseCollector):
                 raw = torch.tensor(values, dtype=torch.float32)
                 normalized, _, _ = _zscore_tensor(raw)
                 data_dict["noaa_sea_level"] = normalized
-                field_mappings.append(FieldMapping(
-                    source_key="noaa_sea_level",
-                    target_field="physical.climate.sea_level_trend",
-                    transform=None,
-                    frequency=ANNUAL,
-                ))
+                inp, out = _io_pair("noaa_sea_level", "physical.climate.sea_level_trend", transform=None, frequency=ANNUAL)
+                input_specs.append(inp)
+                output_specs.append(out)
                 logger.debug("[NOAA] Sea level: %d points", len(normalized))
 
         except Exception as exc:
@@ -1194,9 +1195,10 @@ class IMFCollector(BaseCollector):
             import requests
         except ImportError:
             logger.warning("requests not installed. Install with: pip install requests")
-            return DatasetSpec(name=self.name, mappings=[]), {}
+            return DatasetSpec(name=self.name), {}
 
-        field_mappings: list[FieldMapping] = []
+        input_specs: list[InputSpec] = []
+        output_specs: list[OutputSpec] = []
         data_dict: dict[str, torch.Tensor] = {}
 
         base_url = "http://dataservices.imf.org/REST/SDMX_JSON.svc"
@@ -1247,12 +1249,9 @@ class IMFCollector(BaseCollector):
                     normalized, _, _ = _zscore_tensor(raw)
 
                 data_dict[source_key] = normalized
-                field_mappings.append(FieldMapping(
-                    source_key=source_key,
-                    target_field=target_field,
-                    transform=None,
-                    frequency=frequency,
-                ))
+                inp, out = _io_pair(source_key, target_field, transform=None, frequency=frequency)
+                input_specs.append(inp)
+                output_specs.append(out)
 
                 logger.debug(
                     "[IMF] %s -> %s (%d points)",
@@ -1267,7 +1266,8 @@ class IMFCollector(BaseCollector):
 
         spec = DatasetSpec(
             name="IMF",
-            mappings=field_mappings,
+            input_specs=input_specs,
+            output_specs=output_specs,
             base_period=QUARTERLY,
             weight=0.8,
         )
@@ -1416,9 +1416,10 @@ class BISCollector(BaseCollector):
             import requests
         except ImportError:
             logger.warning("requests not installed. Install with: pip install requests")
-            return DatasetSpec(name=self.name, mappings=[]), {}
+            return DatasetSpec(name=self.name), {}
 
-        field_mappings: list[FieldMapping] = []
+        input_specs: list[InputSpec] = []
+        output_specs: list[OutputSpec] = []
         data_dict: dict[str, torch.Tensor] = {}
 
         base_url = "https://stats.bis.org/api/v1"
@@ -1460,12 +1461,9 @@ class BISCollector(BaseCollector):
                     normalized, _, _ = _zscore_tensor(raw)
 
                 data_dict[full_source_key] = normalized
-                field_mappings.append(FieldMapping(
-                    source_key=full_source_key,
-                    target_field=target_field,
-                    transform=None,
-                    frequency=frequency,
-                ))
+                inp, out = _io_pair(full_source_key, target_field, transform=None, frequency=frequency)
+                input_specs.append(inp)
+                output_specs.append(out)
 
                 logger.debug(
                     "[BIS] %s -> %s (%d points)",
@@ -1480,7 +1478,8 @@ class BISCollector(BaseCollector):
 
         spec = DatasetSpec(
             name="BIS",
-            mappings=field_mappings,
+            input_specs=input_specs,
+            output_specs=output_specs,
             base_period=QUARTERLY,
             weight=0.7,
         )

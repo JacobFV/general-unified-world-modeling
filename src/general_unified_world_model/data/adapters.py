@@ -18,10 +18,21 @@ from typing import Optional
 import numpy as np
 import torch
 
-from general_unified_world_model.training.heterogeneous import DatasetSpec, FieldMapping
+from general_unified_world_model.training.heterogeneous import DatasetSpec, InputSpec, OutputSpec, _infer_semantic_type
 from general_unified_world_model.schema.temporal_constants import (
     TICK, DAILY, WEEKLY, MONTHLY, QUARTERLY,
 )
+
+
+# ── Helpers ──────────────────────────────────────────────────────────────
+
+def _io_pair(key: str, field_path: str, transform=None, frequency=None):
+    """Create matched InputSpec + OutputSpec for a field mapping."""
+    st = _infer_semantic_type(field_path)
+    return (
+        InputSpec(key=key, semantic_type=st, field_path=field_path, transform=transform, frequency=frequency),
+        OutputSpec(key=key, semantic_type=st, field_path=field_path, frequency=frequency),
+    )
 
 
 # ── Normalization functions ──────────────────────────────────────────────
@@ -175,7 +186,7 @@ def fred_adapter(
     if series_ids is None:
         series_ids = list(FRED_MAPPINGS.keys())
 
-    mappings = []
+    input_specs, output_specs = [], []
     data_dict = {}
 
     for sid in series_ids:
@@ -193,18 +204,17 @@ def fred_adapter(
             values = torch.tensor(series.values, dtype=torch.float32)
             data_dict[sid] = values
 
-            mappings.append(FieldMapping(
-                source_key=sid,
-                target_field=target_field,
-                transform=transform,
-                frequency=period,
-            ))
+            inp, out = _io_pair(sid, target_field, transform=transform, frequency=period)
+            input_specs.append(inp)
+            output_specs.append(out)
         except Exception:
             continue
 
     spec = DatasetSpec(
         name="FRED",
-        mappings=mappings,
+        description="Federal Reserve Economic Data: macro, rates, labor, housing",
+        input_specs=input_specs,
+        output_specs=output_specs,
         base_period=TICK,  # FRED data comes at natural frequency
         weight=1.0,
     )
@@ -295,7 +305,7 @@ def yahoo_finance_adapter(
 
     ticker_list = list(all_fields.keys())
     if not ticker_list:
-        return DatasetSpec(name="Yahoo Finance", mappings=[]), {}
+        return DatasetSpec(name="Yahoo Finance", description="Yahoo Finance: equities, FX, commodities, crypto prices"), {}
 
     # Download
     data = yf.download(
@@ -306,7 +316,7 @@ def yahoo_finance_adapter(
         progress=False,
     )
 
-    mappings = []
+    input_specs, output_specs = [], []
     data_dict = {}
 
     for ticker in ticker_list:
@@ -325,18 +335,17 @@ def yahoo_finance_adapter(
             key = f"yahoo_{ticker}"
             data_dict[key] = values
 
-            mappings.append(FieldMapping(
-                source_key=key,
-                target_field=target_field,
-                transform=log_return(),  # always use log returns for prices
-                frequency=TICK,  # daily
-            ))
+            inp, out = _io_pair(key, target_field, transform=log_return(), frequency=TICK)
+            input_specs.append(inp)
+            output_specs.append(out)
         except (KeyError, TypeError):
             continue
 
     spec = DatasetSpec(
         name="Yahoo Finance",
-        mappings=mappings,
+        description="Yahoo Finance: equities, FX, commodities, crypto prices",
+        input_specs=input_specs,
+        output_specs=output_specs,
         base_period=DAILY,  # daily = period 16 in base ticks
         weight=1.0,
     )
@@ -361,7 +370,7 @@ def pmi_adapter(
         (DatasetSpec, data_dict).
     """
     prefix = f"country_{country}.macro.output"
-    mappings = []
+    input_specs, output_specs = [], []
 
     field_map = {
         "manufacturing_pmi": f"{prefix}.pmi_manufacturing",
@@ -371,16 +380,15 @@ def pmi_adapter(
 
     for key, target in field_map.items():
         if key in data:
-            mappings.append(FieldMapping(
-                source_key=key,
-                target_field=target,
-                transform=minmax(30.0, 70.0),  # PMI range
-                frequency=MONTHLY,  # monthly
-            ))
+            inp, out = _io_pair(key, target, transform=minmax(30.0, 70.0), frequency=MONTHLY)
+            input_specs.append(inp)
+            output_specs.append(out)
 
     spec = DatasetSpec(
         name=f"PMI ({country.upper()})",
-        mappings=mappings,
+        description=f"Purchasing Managers Index ({country.upper()})",
+        input_specs=input_specs,
+        output_specs=output_specs,
         base_period=MONTHLY,
         weight=1.5,  # PMI is highly informative
     )
@@ -405,7 +413,7 @@ def earnings_adapter(
         (DatasetSpec, data_dict).
     """
     prefix = f"firm_{firm_name}.financials"
-    mappings = []
+    input_specs, output_specs = [], []
 
     financial_fields = [
         "revenue", "revenue_growth", "cogs", "gross_margin", "opex",
@@ -417,15 +425,15 @@ def earnings_adapter(
         key = f"earnings_{field}"
         if key in data or field in data:
             source = key if key in data else field
-            mappings.append(FieldMapping(
-                source_key=source,
-                target_field=f"{prefix}.{field}",
-                frequency=QUARTERLY,  # quarterly
-            ))
+            inp, out = _io_pair(source, f"{prefix}.{field}", frequency=QUARTERLY)
+            input_specs.append(inp)
+            output_specs.append(out)
 
     spec = DatasetSpec(
         name=f"Earnings ({firm_name})",
-        mappings=mappings,
+        description=f"Quarterly earnings data for {firm_name}",
+        input_specs=input_specs,
+        output_specs=output_specs,
         base_period=QUARTERLY,
         weight=2.0,
     )
@@ -450,17 +458,13 @@ def news_adapter(
     """
     data = {"news_emb": embeddings}
 
-    mappings = [
-        FieldMapping(
-            source_key="news_emb",
-            target_field="events.news_embedding",
-            frequency=TICK,
-        ),
-    ]
+    inp, out = _io_pair("news_emb", "events.news_embedding", frequency=TICK)
 
     spec = DatasetSpec(
         name="News Embeddings",
-        mappings=mappings,
+        description="Pre-computed news article embeddings",
+        input_specs=[inp],
+        output_specs=[out],
         base_period=TICK,
         weight=0.5,
     )
@@ -501,7 +505,7 @@ def tabular_adapter(
         df = pd.read_csv(data_path)
 
     transforms = transforms or {}
-    mappings = []
+    input_specs, output_specs = [], []
     data_dict = {}
 
     for source_col, target_field in column_mappings.items():
@@ -529,15 +533,15 @@ def tabular_adapter(
             transform = rank_normalize()
 
         data_dict[source_col] = values
-        mappings.append(FieldMapping(
-            source_key=source_col,
-            target_field=target_field,
-            transform=transform,
-        ))
+        inp, out = _io_pair(source_col, target_field, transform=transform)
+        input_specs.append(inp)
+        output_specs.append(out)
 
     spec = DatasetSpec(
         name=name,
-        mappings=mappings,
+        description=f"Tabular dataset: {name}",
+        input_specs=input_specs,
+        output_specs=output_specs,
         base_period=base_period,
         weight=weight,
     )
