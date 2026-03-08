@@ -5,7 +5,9 @@ import torch
 
 from general_unified_world_model.projection.subset import project
 from general_unified_world_model.training.backbone import build_world_model
-from general_unified_world_model.training.heterogeneous import FieldEncoder, FieldDecoder
+from general_unified_world_model.training.heterogeneous import (
+    FieldEncoder, FieldDecoder, DatasetSpec, DataSource, InputSpec, OutputSpec,
+)
 from general_unified_world_model.inference import WorldModel
 
 
@@ -66,3 +68,55 @@ def test_save_and_load(small_model, tmp_path):
         n_layers=2, n_loops=1, device="cpu",
     )
     assert len(loaded.bound.field_names) == len(small_model.bound.field_names)
+
+
+def test_finetune(small_model):
+    """finetune() should complete and return loss history."""
+    field_name = small_model.bound.field_names[0]
+    spec = DatasetSpec(
+        name="test_private",
+        input_specs=[InputSpec(key="v", semantic_type="test", field_path=field_name)],
+        output_specs=[OutputSpec(key="v", semantic_type="test", field_path=field_name)],
+    )
+    source = DataSource(spec=spec, data={"v": torch.randn(50)})
+
+    metrics = small_model.finetune(
+        datasets=[source],
+        n_steps=5,
+        batch_size=4,
+        log_every=100,
+    )
+
+    assert "losses" in metrics
+    assert len(metrics["losses"]) == 5
+    assert "final_loss" in metrics
+    assert metrics["final_loss"] >= 0
+
+
+def test_finetune_freeze_backbone(small_model):
+    """finetune with freeze_backbone should only train encoder/decoder."""
+    field_name = small_model.bound.field_names[0]
+    spec = DatasetSpec(
+        name="test_frozen",
+        input_specs=[InputSpec(key="v", semantic_type="test", field_path=field_name)],
+        output_specs=[OutputSpec(key="v", semantic_type="test", field_path=field_name)],
+    )
+    source = DataSource(spec=spec, data={"v": torch.randn(50)})
+
+    # Capture backbone weights before
+    bb_before = {n: p.clone() for n, p in small_model.backbone.named_parameters()}
+
+    metrics = small_model.finetune(
+        datasets=[source],
+        n_steps=3,
+        freeze_backbone=True,
+        batch_size=4,
+        log_every=100,
+    )
+
+    assert len(metrics["losses"]) == 3
+    # Backbone weights should be unchanged
+    for n, p in small_model.backbone.named_parameters():
+        assert torch.allclose(p, bb_before[n]), f"Backbone param {n} changed"
+    # After finetune, requires_grad should be restored
+    assert all(p.requires_grad for p in small_model.backbone.parameters())

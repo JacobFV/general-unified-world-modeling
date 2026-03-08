@@ -11,15 +11,23 @@ import unittest.mock as mock
 from unittest.mock import patch, MagicMock
 
 import pytest
+import torch
 
 from general_unified_world_model.llm.projection_builder import (
     llm_project,
+    llm_build,
     LLMProjectionResult,
     _get_all_field_paths,
     _get_top_level_domains,
     _build_schema_description,
     _parse_llm_response,
+    _source_to_profile,
+    _load_dotenv,
 )
+from general_unified_world_model.training.heterogeneous import (
+    DatasetSpec, DataSource, InputSpec, OutputSpec,
+)
+from general_unified_world_model.inference import GeneralUnifiedWorldModel
 
 
 # ── Unit tests (no API calls) ──────────────────────────────────────────
@@ -219,7 +227,8 @@ class TestMockedOpenAICalls:
 
 
 class TestErrorHandling:
-    def test_missing_api_key_raises(self):
+    @patch("general_unified_world_model.llm.projection_builder._load_dotenv")
+    def test_missing_api_key_raises(self, _mock_dotenv):
         with patch.dict(os.environ, {}, clear=True):
             with pytest.raises(ValueError, match="No API key"):
                 llm_project("test", provider="anthropic")
@@ -317,3 +326,123 @@ class TestLiveOpenAI:
         # Should compile
         bound = result.compile(T=1, H=32, W=32, d_model=32)
         assert len(bound.field_names) > 10
+
+
+# ── LLMProjectionResult.to_model tests ───────────────────────────────────
+
+
+class TestLLMProjectionResultToModel:
+    def test_to_model_returns_world_model(self):
+        result = LLMProjectionResult(include=["financial.yield_curves", "regime"])
+        model = result.to_model(d_model=32)
+        assert isinstance(model, GeneralUnifiedWorldModel)
+        assert len(model.bound.field_names) > 0
+
+    def test_to_model_with_datasets(self):
+        result = LLMProjectionResult(include=["regime"])
+        spec = DatasetSpec(
+            name="t",
+            input_specs=[InputSpec(key="v", semantic_type="x", field_path="regime.growth_regime")],
+        )
+        ds = DataSource(spec=spec, data={"v": torch.randn(10)})
+        model = result.to_model(datasets=[ds], d_model=32)
+        assert model._dataset_specs.get("t") is not None
+
+
+# ── _source_to_profile tests ─────────────────────────────────────────────
+
+
+class TestSourceToProfile:
+    def test_converts_datasource(self):
+        spec = DatasetSpec(
+            name="macro_test",
+            description="My macro dataset",
+            input_specs=[
+                InputSpec(key="gdp", semantic_type="GDP", field_path="country_us.macro.output.gdp_nowcast"),
+            ],
+        )
+        source = DataSource(spec=spec, data={"gdp": torch.randn(100)})
+        profile = _source_to_profile(source)
+
+        assert profile.name == "macro_test"
+        assert profile.description == "My macro dataset"
+        assert profile.n_samples == 100
+        assert "gdp" in profile.columns
+        assert len(profile.input_specs) == 1
+
+    def test_handles_empty_data(self):
+        spec = DatasetSpec(name="empty", input_specs=[])
+        source = DataSource(spec=spec, data={})
+        profile = _source_to_profile(source)
+        assert profile.n_samples == 0
+
+    def test_infers_frequency(self):
+        spec = DatasetSpec(
+            name="freq_test",
+            input_specs=[
+                InputSpec(key="v", semantic_type="x", field_path="regime.growth_regime", frequency=22),
+            ],
+        )
+        source = DataSource(spec=spec, data={"v": torch.randn(50)})
+        profile = _source_to_profile(source)
+        assert profile.update_frequency == "monthly"
+
+
+# ── llm_build tests (mocked) ─────────────────────────────────────────────
+
+
+class TestLLMBuild:
+    @patch("general_unified_world_model.llm.projection_builder.llm_project")
+    def test_projection_only(self, mock_proj):
+        """llm_build with no datasets returns untrained model."""
+        mock_proj.return_value = LLMProjectionResult(
+            include=["financial.yield_curves", "regime"], reasoning="test",
+        )
+        model = llm_build(
+            "test", datasets=None, api_key="sk-test", d_model=32,
+        )
+        assert isinstance(model, GeneralUnifiedWorldModel)
+        assert len(model.bound.field_names) > 0
+
+    @patch("general_unified_world_model.llm.projection_builder.llm_project")
+    def test_with_datasets_and_training(self, mock_proj):
+        """llm_build with datasets should train the model."""
+        mock_proj.return_value = LLMProjectionResult(
+            include=["financial.yield_curves", "regime"], reasoning="test",
+        )
+
+        bound_for_spec = mock_proj.return_value.compile(T=1, d_model=32)
+        field = bound_for_spec.field_names[0]
+
+        spec = DatasetSpec(
+            name="s",
+            input_specs=[InputSpec(key="v", semantic_type="x", field_path=field)],
+            output_specs=[OutputSpec(key="v", semantic_type="x", field_path=field)],
+        )
+        ds = DataSource(spec=spec, data={"v": torch.randn(50)})
+
+        model = llm_build(
+            "test",
+            datasets=[ds],
+            api_key="sk-test",
+            n_steps=3,
+            d_model=32,
+            batch_size=4,
+            log_every=100,
+        )
+        assert isinstance(model, GeneralUnifiedWorldModel)
+
+    @patch("general_unified_world_model.llm.projection_builder.llm_project")
+    def test_n_steps_zero_skips_training(self, mock_proj):
+        """n_steps=0 returns an untrained model even with datasets."""
+        mock_proj.return_value = LLMProjectionResult(
+            include=["regime"], reasoning="test",
+        )
+        spec = DatasetSpec(name="s", input_specs=[])
+        ds = DataSource(spec=spec, data={})
+
+        model = llm_build(
+            "test", datasets=[ds], api_key="sk-test",
+            n_steps=0, d_model=32,
+        )
+        assert isinstance(model, GeneralUnifiedWorldModel)

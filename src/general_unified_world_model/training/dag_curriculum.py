@@ -642,6 +642,48 @@ class DAGCurriculumTrainer:
         print(f"\nDone! Trained {len(order)} nodes.")
         print(f"Checkpoints in: {self.checkpoint_dir}")
 
+    def get_final_model(self, device: str = "cpu"):
+        """Extract a ``WorldModel`` from the last trained DAG node.
+
+        Call after ``run()`` to get a model ready for inference or
+        further fine-tuning.
+
+        Args:
+            device: Device to place the model on.
+
+        Returns:
+            ``WorldModel`` with the final trained weights.
+        """
+        from general_unified_world_model.inference import WorldModel
+
+        order = self._topo_sort()
+        last_name = None
+        for name in reversed(order):
+            if name in self.trained:
+                last_name = name
+                break
+
+        if last_name is None:
+            raise RuntimeError("No trained nodes. Call run() first.")
+
+        trained = self.trained[last_name]
+        bound = trained["bound"]
+        node = self.nodes[last_name]
+
+        if "backbone" in trained:
+            backbone = trained["backbone"].to(device)
+        else:
+            backbone = build_world_model(
+                bound, n_layers=node.n_layers, n_loops=node.n_loops,
+            )
+            backbone.load_state_dict(trained["backbone_state"], strict=False)
+            backbone = backbone.to(device)
+
+        encoder = trained["encoder"].to(device)
+        decoder = trained["decoder"].to(device)
+
+        return WorldModel(bound, backbone, encoder, decoder, device=device)
+
     def run_tier(self, tier: int):
         """Run a specific tier of the standard DAG.
 
@@ -957,9 +999,29 @@ def build_curriculum(
     import os
     import urllib.request
     import urllib.error
+    from pathlib import Path as _Path
 
     from general_unified_world_model.schema.world import World
     from canvas_engineering import Field
+
+    # Load .env if present
+    for _dir in [_Path.cwd()] + list(_Path.cwd().parents):
+        _env = _dir / ".env"
+        if _env.exists():
+            try:
+                with open(_env) as _f:
+                    for _line in _f:
+                        _line = _line.strip()
+                        if not _line or _line.startswith("#") or "=" not in _line:
+                            continue
+                        _k, _, _v = _line.partition("=")
+                        _k = _k.strip()
+                        _v = _v.strip().strip('"').strip("'")
+                        if _k and _k not in os.environ:
+                            os.environ[_k] = _v
+            except (OSError, PermissionError):
+                pass
+            break
 
     # Build schema description
     all_paths = []
