@@ -342,8 +342,8 @@ def project(
     but coarse-grain politics, demographics, etc. to single positions.
     Their field names stay the same, so weights transfer across projections.
 
-    Uses bottleneck connectivity by default: each nested sub-type gets a
-    1×1 gateway field. Cross-level attention routes through gateways,
+    Each nested sub-type automatically gets a coarse-grained field at
+    its own path. Cross-level attention routes through these fields,
     making hierarchical interactions O(1) per entity.
 
     Args:
