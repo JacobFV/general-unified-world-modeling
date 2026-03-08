@@ -70,6 +70,288 @@ graph TD
     style FOR fill:#6f6,stroke:#333,stroke-width:3px
 ```
 
+### Entity connection topology
+
+The block diagram above shows layer-to-layer causal arrows. The bubble diagrams below show how **entity instances** connect through **coarse-grained (CG) bridge nodes**. When the schema is compiled onto the canvas, `compile_schema` creates a CG aggregate at each nesting level — a single canvas position that summarizes all fields below it. CG nodes (hexagons below) serve as information bottlenecks, enabling efficient cross-entity and cross-layer attention without O(n^2) all-to-all connections.
+
+#### Full world instance map
+
+All 25 top-level `World` fields. Dense always-on layers appear as circles. Entity instances appear as hexagons — each hexagon is that entity's coarse-grained bridge node, summarizing its entire internal state into a single canvas position that connects to the rest of the world.
+
+```mermaid
+graph TD
+    subgraph structural["Structural Substrate"]
+        PHY((Physical))
+        RES((Resources))
+        TECH((Technology))
+        BIO((Biology))
+    end
+
+    subgraph infragroup["Infrastructure & Context"]
+        INFRA((Infrastructure))
+        CYB((Cyber))
+        SPC((Space))
+        HLT((Health))
+        EDU((Education))
+        LEG((Legal))
+    end
+
+    subgraph marketgroup["Markets & Beliefs"]
+        FIN((Financial))
+        NAR((Narratives))
+    end
+
+    subgraph countrygroup["Countries"]
+        US{{country_us}}
+        CN{{country_cn}}
+        EU{{country_eu}}
+    end
+
+    subgraph sectorgroup["Sectors"]
+        ST{{sector_tech}}
+        SE{{sector_energy}}
+        SF{{sector_fin}}
+    end
+
+    subgraph scgroup["Supply Chain Nodes"]
+        SCS{{sc_semi}}
+        SCE{{sc_energy}}
+        SCF{{sc_food}}
+    end
+
+    subgraph firmgroup["Firms"]
+        FA{{firm_alpha}}
+        FB{{firm_beta}}
+    end
+
+    subgraph persongroup["Individuals"]
+        PA{{person_alpha}}
+        PB{{person_beta}}
+    end
+
+    subgraph metagroup["Meta & Output"]
+        EVT((Events))
+        TRU((Trust))
+        REG((Regime))
+        INT((Interventions))
+        FOR((Forecasts))
+    end
+
+    PHY --> RES
+    RES --> FIN
+    TECH --> FIN
+    BIO --> HLT
+
+    PA -->|org_link| FA
+    PB -->|org_link| FB
+    FA -->|sector_link| ST
+    FB -->|sector_link| SE
+    FA -->|geo_link| US
+    FB -->|geo_link| CN
+    SCS --> ST
+    SCE --> SE
+    SCF --> RES
+
+    US --> FIN
+    US --> REG
+    CN --> FIN
+    EU --> FIN
+    ST --> TECH
+    SE --> RES
+    SF --> FIN
+    FA --> EVT
+    FB --> EVT
+
+    REG --> FOR
+    EVT --> NAR
+    NAR --> FIN
+    INT --> FOR
+
+    style US fill:#4a9,stroke:#333,color:#fff
+    style CN fill:#4a9,stroke:#333,color:#fff
+    style EU fill:#4a9,stroke:#333,color:#fff
+    style ST fill:#c84,stroke:#333,color:#fff
+    style SE fill:#c84,stroke:#333,color:#fff
+    style SF fill:#c84,stroke:#333,color:#fff
+    style FA fill:#48c,stroke:#333,color:#fff
+    style FB fill:#48c,stroke:#333,color:#fff
+    style PA fill:#84c,stroke:#333,color:#fff
+    style PB fill:#84c,stroke:#333,color:#fff
+    style SCS fill:#aa4,stroke:#333
+    style SCE fill:#aa4,stroke:#333
+    style SCF fill:#aa4,stroke:#333
+    style REG fill:#ff6,stroke:#333,stroke-width:3px
+    style FOR fill:#6f6,stroke:#333,stroke-width:3px
+```
+
+#### Cross-entity bridge chain
+
+Entities form a hierarchy through explicit link fields (`org_link`, `sector_link`, `geography_link`). Each entity type's internal sub-components (circles) flow into that entity's CG bridge node (hexagon). Thick arrows show inter-entity bridges; dotted arrows show outward connections to dense layers.
+
+```mermaid
+graph LR
+    subgraph ind["Individual"]
+        I_COG((Cognitive))
+        I_INC((Incentives))
+        I_NET((Network))
+        I_STA((State))
+        I_CG{{Individual CG}}
+        I_COG --> I_CG
+        I_INC --> I_CG
+        I_NET --> I_CG
+        I_STA --> I_CG
+    end
+
+    subgraph biz["Business"]
+        B_FIN((Financials))
+        B_OPS((Operations))
+        B_STR((Strategy))
+        B_MKT((Market Pos))
+        B_RSK((Risk))
+        B_SC((SupplyChain))
+        B_CG{{Business CG}}
+        B_FIN --> B_CG
+        B_OPS --> B_CG
+        B_STR --> B_CG
+        B_MKT --> B_CG
+        B_RSK --> B_CG
+        B_SC --> B_CG
+    end
+
+    subgraph sec["Sector"]
+        S_DEM((Demand))
+        S_SUP((Supply))
+        S_PRO((Profitability))
+        S_STR((Structural))
+        S_CG{{Sector CG}}
+        S_DEM --> S_CG
+        S_SUP --> S_CG
+        S_PRO --> S_CG
+        S_STR --> S_CG
+    end
+
+    subgraph cty["Country"]
+        C_MAC((Macro))
+        C_POL((Political))
+        C_DEM((Demographics))
+        C_CG{{Country CG}}
+        C_MAC --> C_CG
+        C_POL --> C_CG
+        C_DEM --> C_CG
+    end
+
+    I_CG ==>|org_link| B_CG
+    B_CG ==>|sector_link| S_CG
+    B_CG ==>|geography_link| C_CG
+
+    C_CG -.-> DL((Dense Layers))
+    S_CG -.-> DL
+    B_CG -.-> DL
+    I_CG -.-> DL
+
+    style I_CG fill:#84c,stroke:#333,color:#fff
+    style B_CG fill:#48c,stroke:#333,color:#fff
+    style S_CG fill:#c84,stroke:#333,color:#fff
+    style C_CG fill:#4a9,stroke:#333,color:#fff
+    style DL fill:#eee,stroke:#999,stroke-dasharray:5
+```
+
+#### Country coarse-graining detail
+
+A Country entity contains three major sub-schemas, each with its own CG bridge. Sub-component CG nodes (inner hexagons) aggregate their fields, then flow into the top-level Country CG (outer hexagon) that bridges to dense layers and other entities.
+
+```mermaid
+graph LR
+    subgraph macro["MacroEconomy"]
+        OG((Output &<br/>Growth))
+        IS((Inflation))
+        LM((Labor<br/>Market))
+        FS((Fiscal))
+        TB((Trade))
+        HM((Housing))
+        MAC_CG{{Macro CG}}
+        OG --> MAC_CG
+        IS --> MAC_CG
+        LM --> MAC_CG
+        FS --> MAC_CG
+        TB --> MAC_CG
+        HM --> MAC_CG
+    end
+
+    subgraph pol["PoliticalLayer"]
+        EX((Executive))
+        LE((Legislative))
+        JU((Judicial))
+        GEO((Geopolitical))
+        IQ((Institutional<br/>Quality))
+        POL_CG{{Political CG}}
+        EX --> POL_CG
+        LE --> POL_CG
+        JU --> POL_CG
+        GEO --> POL_CG
+        IQ --> POL_CG
+    end
+
+    subgraph dem["DemographicLayer"]
+        DP((Population, Dependency,<br/>Urbanization, Fertility, ...))
+        DEM_CG{{Demographics CG}}
+        DP --> DEM_CG
+    end
+
+    CTR_CG{{"Country CG"}}
+    MAC_CG ==> CTR_CG
+    POL_CG ==> CTR_CG
+    DEM_CG ==> CTR_CG
+
+    CTR_CG --> FIN((Financial))
+    CTR_CG --> NAR((Narratives))
+    CTR_CG --> REG((Regime))
+    CTR_CG --> FOR((Forecasts))
+    CTR_CG --> LEG((Legal))
+    CTR_CG -.-> SEC{{Sectors}}
+    CTR_CG -.-> BIZ{{Firms}}
+
+    style MAC_CG fill:#4a9,stroke:#333,color:#fff
+    style POL_CG fill:#4a9,stroke:#333,color:#fff
+    style DEM_CG fill:#4a9,stroke:#333,color:#fff
+    style CTR_CG fill:#2d7,stroke:#333,color:#fff,stroke-width:3px
+```
+
+#### Business coarse-graining detail
+
+A Business entity has six sub-schemas (including an embedded SupplyChainNode). Each flows through the Business CG bridge, which connects outward via `sector_link` and `geography_link` to Sector and Country entities, and directly to Financial, Events, and Forecasts layers.
+
+```mermaid
+graph LR
+    subgraph biz["Business Internal"]
+        FF((Financials<br/>18 fields))
+        FO((Operations<br/>10 fields))
+        FS2((Strategy<br/>10 fields))
+        FM((Market Pos<br/>8 fields))
+        FR((Risk<br/>8 fields))
+        SC((SupplyChain<br/>9 fields))
+        BIZ_CG{{Business CG}}
+        FF --> BIZ_CG
+        FO --> BIZ_CG
+        FS2 --> BIZ_CG
+        FM --> BIZ_CG
+        FR --> BIZ_CG
+        SC --> BIZ_CG
+    end
+
+    BIZ_CG -->|sector_link| SEC{{Sector CG}}
+    BIZ_CG -->|geography_link| CTY{{Country CG}}
+    BIZ_CG --> FIN((Financial))
+    BIZ_CG --> EVT((Events))
+    BIZ_CG --> FOR((Forecasts))
+    BIZ_CG -.->|org_link| IND{{Individual CG}}
+
+    style BIZ_CG fill:#48c,stroke:#333,color:#fff,stroke-width:3px
+    style SEC fill:#c84,stroke:#333,color:#fff
+    style CTY fill:#4a9,stroke:#333,color:#fff
+    style IND fill:#84c,stroke:#333,color:#fff
+```
+
 ---
 
 ## 1. Planetary Physical Layer
