@@ -3,19 +3,19 @@
 A company CEO tells their engineer: model the firm's financials, operations,
 key people, relevant sector dynamics, and the macro environment they operate in.
 
-This example shows how WorldProjection selects the relevant subset of the
+This example shows how project() selects the relevant subset of the
 full world model and compiles it to a focused canvas.
 
 Run: python examples/02_ceo_company_model.py
 """
 
 from canvas_engineering import ConnectivityPolicy
-from general_unified_world_model.projection.subset import WorldProjection, project
+from general_unified_world_model.projection.subset import project
 from general_unified_world_model.schema.business import Business
 from general_unified_world_model.schema.individual import Individual
 
 # CEO's specification: "Model our company in context"
-proj = WorldProjection(
+bound = project(
     include=[
         # The macro environment we operate in
         "country_us.macro.output",       # GDP, PMI, retail sales
@@ -64,10 +64,9 @@ proj = WorldProjection(
         array_element="dense",     # all individuals see each other
         temporal="dense",
     ),
-)
 
-# Compile to canvas
-bound = project(proj, T=1, H=64, W=64, d_model=64)
+    T=1, H=64, W=64, d_model=64,
+)
 
 print("=" * 70)
 print("CEO Company Model — Canvas Schema")

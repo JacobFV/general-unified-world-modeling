@@ -16,11 +16,11 @@ import os
 import torch
 from canvas_engineering import ConnectivityPolicy
 
-from general_unified_world_model.projection.subset import WorldProjection, project
+from general_unified_world_model.projection.subset import project
 from general_unified_world_model.training.backbone import build_world_model
 from general_unified_world_model.training.heterogeneous import (
     FieldEncoder, FieldDecoder, MaskedCanvasTrainer,
-    build_mixed_dataloader,
+    DataSource, build_mixed_dataloader,
 )
 from general_unified_world_model.data.adapters import fred_adapter, yahoo_finance_adapter
 
@@ -30,7 +30,7 @@ def main():
     print(f"Device: {device}")
 
     # 1. Projection: financial markets + US macro
-    proj = WorldProjection(
+    bound = project(
         include=[
             "financial",
             "country_us.macro",
@@ -40,9 +40,8 @@ def main():
             "forecasts.macro",
             "forecasts.financial",
         ],
+        T=1, H=48, W=48, d_model=64,
     )
-
-    bound = project(proj, T=1, H=48, W=48, d_model=64)
     print(f"Schema: {len(bound.field_names)} fields, "
           f"{bound.layout.num_positions} positions")
 
@@ -52,9 +51,9 @@ def main():
     # FRED macro data
     if os.environ.get("FRED_API_KEY"):
         print("Fetching FRED data...")
-        fred_spec, fred_data = fred_adapter(start_date="2010-01-01")
-        sources.append((fred_spec, fred_data))
-        print(f"  FRED: {len(fred_spec.input_specs)} series")
+        fred_source = fred_adapter(start_date="2010-01-01")
+        sources.append(fred_source)
+        print(f"  FRED: {len(fred_source.spec.input_specs)} series")
     else:
         print("FRED_API_KEY not set, generating synthetic data")
         sources.append(_synthetic_macro_source(bound))
@@ -62,15 +61,15 @@ def main():
     # Yahoo Finance market data
     try:
         print("Fetching Yahoo Finance data...")
-        yahoo_spec, yahoo_data = yahoo_finance_adapter(
+        yahoo_source = yahoo_finance_adapter(
             start_date="2010-01-01",
             include_equity=True,
             include_fx=True,
             include_commodities=True,
             include_crypto=True,
         )
-        sources.append((yahoo_spec, yahoo_data))
-        print(f"  Yahoo: {len(yahoo_spec.input_specs)} tickers")
+        sources.append(yahoo_source)
+        print(f"  Yahoo: {len(yahoo_source.spec.input_specs)} tickers")
     except ImportError:
         print("yfinance not installed, using synthetic data")
         sources.append(_synthetic_market_source(bound))
@@ -120,7 +119,7 @@ def main():
 
 def _synthetic_macro_source(bound):
     """Generate synthetic macro data for testing."""
-    from general_unified_world_model.training.heterogeneous import DatasetSpec, InputSpec, OutputSpec
+    from general_unified_world_model.training.heterogeneous import DatasetSpec, DataSource, InputSpec, OutputSpec
 
     n_rows = 1000
     data = {}
@@ -145,12 +144,12 @@ def _synthetic_macro_source(bound):
             ))
 
     spec = DatasetSpec(name="Synthetic Macro", input_specs=input_specs, output_specs=output_specs)
-    return spec, data
+    return DataSource(spec=spec, data=data)
 
 
 def _synthetic_market_source(bound):
     """Generate synthetic market data for testing."""
-    from general_unified_world_model.training.heterogeneous import DatasetSpec, InputSpec, OutputSpec
+    from general_unified_world_model.training.heterogeneous import DatasetSpec, DataSource, InputSpec, OutputSpec
 
     n_rows = 1000
     data = {}
@@ -174,7 +173,7 @@ def _synthetic_market_source(bound):
             ))
 
     spec = DatasetSpec(name="Synthetic Market", input_specs=input_specs, output_specs=output_specs)
-    return spec, data
+    return DataSource(spec=spec, data=data)
 
 
 if __name__ == "__main__":

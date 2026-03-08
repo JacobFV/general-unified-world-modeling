@@ -1,7 +1,7 @@
 """Tests for projection filtering."""
 
 from general_unified_world_model.projection.subset import (
-    WorldProjection, project, _resolve_path,
+    project, _resolve_path,
 )
 from general_unified_world_model.schema.world import World
 
@@ -31,8 +31,7 @@ class TestResolvePath:
 class TestProjectionFiltering:
     def test_full_include_expands_everything(self):
         """Full path include should expand all sub-types."""
-        proj = WorldProjection(include=["financial"])
-        bound = project(proj, T=1, H=32, W=32, d_model=32)
+        bound = project(include=["financial"], T=1, H=32, W=32, d_model=32)
         # All YieldCurveState leaf fields should exist
         yc_leaf_fields = [n for n in bound.field_names
                           if "yield_curves" in n and "." in n]
@@ -40,8 +39,7 @@ class TestProjectionFiltering:
 
     def test_sub_path_is_independent(self):
         """Sub-path include should be a standalone entity."""
-        proj = WorldProjection(include=["financial.yield_curves", "regime"])
-        bound = project(proj, T=1, H=32, W=32, d_model=32)
+        bound = project(include=["financial.yield_curves", "regime"], T=1, H=32, W=32, d_model=32)
         # yield_curves should have its leaf fields
         yc_fields = [n for n in bound.field_names if "ten_year" in n]
         assert len(yc_fields) == 1
@@ -51,8 +49,7 @@ class TestProjectionFiltering:
 
     def test_country_sub_path_standalone(self):
         """country_us.macro without country_us is standalone."""
-        proj = WorldProjection(include=["country_us.macro", "regime"])
-        bound = project(proj, T=1, H=32, W=32, d_model=32)
+        bound = project(include=["country_us.macro", "regime"], T=1, H=32, W=32, d_model=32)
         # politics and demographics should NOT exist
         politics = [n for n in bound.field_names if "politics" in n]
         assert len(politics) == 0
@@ -62,18 +59,17 @@ class TestProjectionFiltering:
 
     def test_wildcard_includes_everything(self):
         """Wildcard include should expand all sub-types."""
-        proj = WorldProjection(include=["*"])
-        bound = project(proj, T=1, H=128, W=128, d_model=32)
+        bound = project(include=["*"], T=1, H=128, W=128, d_model=32)
         yc_leaf_fields = [n for n in bound.field_names
                           if n.startswith("financial.yield_curves.")]
         assert len(yc_leaf_fields) == 10
 
     def test_multiple_independent_paths(self):
         """Multiple paths are each independently resolved."""
-        proj = WorldProjection(
+        bound = project(
             include=["financial.yield_curves", "financial.credit", "regime"],
+            T=1, H=32, W=32, d_model=32,
         )
-        bound = project(proj, T=1, H=32, W=32, d_model=32)
         # Both should have their fields
         yc_fields = [n for n in bound.field_names if "ten_year" in n]
         credit_fields = [n for n in bound.field_names if "ig_spread" in n]
@@ -85,15 +81,13 @@ class TestProjectionFiltering:
 
     def test_connectivity_exists(self):
         """Included fields should have connections."""
-        proj = WorldProjection(include=["financial.yield_curves", "regime"])
-        bound = project(proj, T=1, H=32, W=32, d_model=32)
+        bound = project(include=["financial.yield_curves", "regime"], T=1, H=32, W=32, d_model=32)
         assert bound.topology is not None
         assert len(bound.topology.connections) > 0
 
     def test_invalid_path_skipped(self):
         """Invalid paths should be silently skipped."""
-        proj = WorldProjection(include=["nonexistent", "regime"])
-        bound = project(proj, T=1, H=32, W=32, d_model=32)
+        bound = project(include=["nonexistent", "regime"], T=1, H=32, W=32, d_model=32)
         # regime should still work
         regime_fields = [n for n in bound.field_names if "regime" in n]
         assert len(regime_fields) > 0

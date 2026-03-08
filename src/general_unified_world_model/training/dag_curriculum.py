@@ -39,14 +39,14 @@ from typing import Any, Optional
 import torch
 import torch.nn as nn
 
-from general_unified_world_model.projection.subset import WorldProjection, project
+from general_unified_world_model.projection.subset import project
 from general_unified_world_model.training.backbone import (
     build_world_model, WorldModelBackbone,
     build_cogvideox_world_model, CogVideoXBackbone,
 )
 from general_unified_world_model.training.heterogeneous import (
     FieldEncoder, FieldDecoder, MaskedCanvasTrainer,
-    DatasetSpec, InputSpec, OutputSpec, build_mixed_dataloader,
+    DatasetSpec, DataSource, InputSpec, OutputSpec, build_mixed_dataloader,
 )
 
 
@@ -274,7 +274,7 @@ class DAGCurriculumTrainer:
     def __init__(
         self,
         nodes: list[TrainingNode],
-        data_sources: dict[str, tuple[DatasetSpec, dict]],
+        data_sources: dict[str, DataSource],
         checkpoint_dir: str = "checkpoints",
         device: str = "cpu",
         embed_fn=None,
@@ -285,7 +285,7 @@ class DAGCurriculumTrainer:
         """
         Args:
             nodes: List of TrainingNode definitions forming the DAG.
-            data_sources: Dict mapping source names to (DatasetSpec, data) tuples.
+            data_sources: Dict mapping source names to DataSource objects.
             checkpoint_dir: Where to save checkpoints.
             device: Training device ("cpu", "cuda", etc.).
             embed_fn: Optional embedding function for semantic conditioning.
@@ -360,14 +360,12 @@ class DAGCurriculumTrainer:
         return order
 
     def _build_projection(self, node: TrainingNode):
-        """Build a WorldProjection and BoundSchema from a node."""
+        """Build a BoundSchema from a node's include/entities."""
         entities = _resolve_entities(node.entities) if node.entities else {}
-        proj = WorldProjection(
-            include=node.include,
-            entities=entities,
+        return project(
+            include=node.include, entities=entities,
+            T=1, H=node.H, W=node.W, d_model=node.d_model,
         )
-        bound = project(proj, T=1, H=node.H, W=node.W, d_model=node.d_model)
-        return proj, bound
 
     def _build_conditioner(self, bound):
         """Build a SemanticConditioner for a BoundSchema."""
@@ -455,7 +453,7 @@ class DAGCurriculumTrainer:
         print(f"{'='*60}")
 
         # Build projection
-        proj, bound = self._build_projection(node)
+        bound = self._build_projection(node)
         n_fields = len(bound.field_names)
         print(f"  Fields: {n_fields}, Canvas: {node.H}x{node.W}, "
               f"Positions: {bound.layout.num_positions}")

@@ -10,12 +10,12 @@ Run: python examples/04_computer_use_agent.py
 """
 
 from canvas_engineering import ConnectivityPolicy
-from general_unified_world_model.projection.subset import WorldProjection, project
+from general_unified_world_model.projection.subset import project
 from general_unified_world_model.schema.individual import Individual
 from general_unified_world_model.schema.business import Business
 
 # Computer use agent's world model
-proj = WorldProjection(
+bound = project(
     include=[
         # The user's psychological decomposition
         # (projected onto the Individual schema)
@@ -44,9 +44,9 @@ proj = WorldProjection(
         parent_child="hub_spoke",
         temporal="causal",     # causal temporal: don't leak future context
     ),
-)
 
-bound = project(proj, T=1, H=32, W=32, d_model=64)
+    T=1, H=32, W=32, d_model=64,
+)
 
 print("=" * 70)
 print("Computer Use Agent — World Model Context")

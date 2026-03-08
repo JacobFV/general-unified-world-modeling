@@ -110,7 +110,7 @@ print(result.reasoning)
 
 ```python
 from general_unified_world_model import (
-    WorldProjection, project, build_world_model,
+    project, build_world_model,
     FieldEncoder, FieldDecoder, MaskedCanvasTrainer,
     DatasetSpec, FieldMapping, build_mixed_dataloader,
 )
@@ -673,7 +673,7 @@ src/general_unified_world_model/
 │   ├── country.py    # Composite per country
 │   └── observability.py  # Reusable epistemic bundles
 ├── projection/       # Subsetting & connectivity
-│   ├── subset.py     # WorldProjection, project()
+│   ├── subset.py     # project() — schema projection and compilation
 │   ├── temporal.py   # Temporal entity management
 │   └── transfer.py   # Semantic transfer distance
 ├── training/         # Training infrastructure
@@ -695,7 +695,7 @@ src/general_unified_world_model/
 │   ├── regime.py     # Regime state dashboard
 │   └── social.py     # Social/entity network graph
 ├── llm/              # LLM-powered projection builder
-│   └── projection_builder.py  # Natural language → WorldProjection
+│   └── projection_builder.py  # Natural language → projection design
 └── inference.py      # Observe/predict API
 ```
 

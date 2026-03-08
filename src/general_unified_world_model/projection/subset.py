@@ -1,4 +1,4 @@
-"""WorldProjection: declare which parts of a schema you need.
+"""Schema projection: select which parts of a schema to compile.
 
 You explicitly list every node you want to model. Only listed paths
 (and structural ancestors needed to reach them) are included. Non-listed
@@ -11,10 +11,10 @@ hierarchical bottlenecking for cross-level attention.
 Usage:
     from general_unified_world_model import World, project
 
-    # Clean API: schema root + include
+    # Schema root + include
     bound = project(World(), include=["financial", "regime"])
 
-    # Or with entities
+    # With entities
     from general_unified_world_model.schema.business import Business
     bound = project(
         World(),
@@ -22,17 +22,15 @@ Usage:
         entities={"firm_AAPL": Business(), "firm_NVDA": Business()},
     )
 
-    # Legacy API still works
-    proj = WorldProjection(include=["financial"], entities={...})
-    bound = project(proj, T=1, d_model=64)
+    # Default root (World()) when omitted
+    bound = project(include=["financial"], T=1, d_model=64)
 """
 
 from __future__ import annotations
 
 import copy
 import dataclasses
-from dataclasses import dataclass, field as dc_field
-from typing import Any, Optional
+from typing import Any
 
 from canvas_engineering import ConnectivityPolicy, compile_schema
 
@@ -128,45 +126,10 @@ def _make_projected_dataclass(
     return ProjectedType()
 
 
-# ── Projection ──────────────────────────────────────────────────────────
-
-@dataclass
-class WorldProjection:
-    """Declares which subset of a schema to activate.
-
-    Only explicitly listed paths are included. Non-listed siblings are
-    omitted entirely. compile_schema handles structural coarse-graining
-    (every nested type gets a coarse-grained field automatically).
-
-    Args:
-        include: List of dotted paths into the schema to include.
-            E.g. ["financial", "country_us.macro", "regime"].
-            Use ["*"] to include everything.
-
-        exclude: List of dotted paths to exclude (applied after include).
-
-        entities: Dict mapping entity names to dataclass instances.
-            Keys are arbitrary names (e.g. "firm_AAPL", "person_fed_chair",
-            "sector_tech", "country_jp"). Values must be dataclass instances
-            that compile_schema can traverse.
-
-        connectivity: Override the default connectivity policy.
-
-        temporal_start: Dict mapping entity names to their temporal start
-            index. E.g. {"firm_AAPL": 100} means Apple's fields only
-            appear after timestep 100 in SFT data.
-    """
-    include: list[str] = dc_field(default_factory=lambda: ["*"])
-    exclude: list[str] = dc_field(default_factory=list)
-
-    entities: dict[str, Any] = dc_field(default_factory=dict)
-
-    connectivity: Optional[ConnectivityPolicy] = None
-    temporal_start: dict[str, int] = dc_field(default_factory=dict)
-
+# ── project() ────────────────────────────────────────────────────────────
 
 def project(
-    proj_or_root=None,
+    schema_root=None,
     /,
     include: list[str] | None = None,
     exclude: list[str] | None = None,
@@ -180,10 +143,8 @@ def project(
 ) -> "BoundSchema":
     """Compile a schema projection into a BoundSchema.
 
-    Accepts either a WorldProjection (legacy) or a schema root directly.
-
     Usage:
-        # Clean API: schema root + include/exclude
+        # Schema root + include/exclude
         bound = project(World(), include=["financial", "regime"])
 
         # With entities
@@ -195,15 +156,11 @@ def project(
         # Auto-sized (H, W computed from field count)
         bound = project(World(), include=["regime"], d_model=64)
 
-        # Legacy API: WorldProjection
-        proj = WorldProjection(include=["financial"])
-        bound = project(proj, T=1, d_model=64)
+        # Default root (World()) when omitted
+        bound = project(include=["financial"], T=1, d_model=64)
 
     Args:
-        proj_or_root: A WorldProjection, a schema root (dataclass), or None.
-            - WorldProjection: use directly (legacy API)
-            - Dataclass: use as schema root with include/exclude/entities
-            - None: defaults to World()
+        schema_root: A schema root dataclass, or None (defaults to World()).
         include: Dotted paths to include. Default ["*"] (all).
         exclude: Dotted paths to exclude.
         entities: Dict of entity_name -> dataclass instance.
@@ -216,42 +173,23 @@ def project(
     Returns:
         BoundSchema with layout, topology, and field accessors.
     """
-    # Determine root and projection
-    if isinstance(proj_or_root, WorldProjection):
-        # Legacy API: project(WorldProjection(...), T=1)
-        proj = proj_or_root
-        root = World()
-    elif proj_or_root is not None and dataclasses.is_dataclass(proj_or_root):
-        # New API: project(World(), include=[...])
-        root = proj_or_root
-        proj = WorldProjection(
-            include=include or ["*"],
-            exclude=exclude or [],
-            entities=entities or {},
-            connectivity=connectivity,
-        )
-    else:
-        # Default: project(include=[...]) uses World()
-        root = World()
-        proj = WorldProjection(
-            include=include or ["*"],
-            exclude=exclude or [],
-            entities=entities or {},
-            connectivity=connectivity,
-        )
+    if schema_root is None:
+        schema_root = World()
 
     projected = _make_projected_dataclass(
-        root, proj.include, proj.exclude,
-        proj.entities,
+        schema_root,
+        include or ["*"],
+        exclude or [],
+        entities or {},
     )
 
-    conn = connectivity or proj.connectivity or ConnectivityPolicy(
+    conn = connectivity or ConnectivityPolicy(
         intra="dense",
         array_element="ring",
         temporal="dense",
     )
 
-    bound = compile_schema(
+    return compile_schema(
         projected,
         T=T,
         H=H,
@@ -260,5 +198,3 @@ def project(
         connectivity=conn,
         t_current=t_current,
     )
-
-    return bound

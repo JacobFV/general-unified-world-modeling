@@ -3,7 +3,7 @@
 Each collector:
 1. Downloads data from a free API or public source
 2. Caches it locally (in ~/.cache/guwm/ by default)
-3. Returns a (DatasetSpec, dict[str, torch.Tensor]) tuple ready for
+3. Returns a DataSource (spec + data dict) ready for
    the heterogeneous training pipeline
 
 Collectors gracefully degrade if optional dependencies (fredapi, yfinance)
@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from general_unified_world_model.training.heterogeneous import DatasetSpec, InputSpec, OutputSpec, _infer_semantic_type
+from general_unified_world_model.training.heterogeneous import DatasetSpec, DataSource, InputSpec, OutputSpec, _infer_semantic_type
 from general_unified_world_model.data.adapters import (
     z_score,
     minmax,
@@ -97,7 +97,7 @@ class BaseCollector(ABC):
         self.force_refresh = force_refresh
 
     @abstractmethod
-    def _fetch(self) -> tuple[DatasetSpec, dict[str, torch.Tensor]]:
+    def _fetch(self) -> DataSource:
         """Download and transform data. Implemented by subclasses."""
         ...
 
@@ -111,12 +111,12 @@ class BaseCollector(ABC):
     def name(self) -> str:
         ...
 
-    def collect(self) -> tuple[DatasetSpec, dict[str, torch.Tensor]]:
+    def collect(self) -> DataSource:
         """Download, cache, and return data.
 
         Returns:
-            (DatasetSpec, dict[str, torch.Tensor]) ready for the training pipeline.
-            If the data source is unavailable, returns an empty spec and dict.
+            DataSource ready for the training pipeline.
+            If the data source is unavailable, returns a DataSource with empty spec and dict.
         """
         cache_file = self.cache_dir / f"{self.name}_{_cache_key(self.name, self._cache_params())}.pt"
 
@@ -127,17 +127,18 @@ class BaseCollector(ABC):
                 logger.info("[%s] Loaded %d series from cache", self.name, len(cached["data"]))
                 spec = cached["spec"]
                 data = cached["data"]
-                return spec, data
+                return DataSource(spec=spec, data=data)
 
         # Fetch fresh data
         logger.info("[%s] Fetching fresh data...", self.name)
         try:
-            spec, data = self._fetch()
+            result = self._fetch()
+            spec, data = result.spec, result.data
         except Exception as exc:
             logger.warning("[%s] Failed to fetch data: %s", self.name, exc)
             spec = DatasetSpec(name=self.name)
             data = {}
-            return spec, data
+            return DataSource(spec=spec, data=data)
 
         if data:
             try:
@@ -147,7 +148,7 @@ class BaseCollector(ABC):
 
         logger.info("[%s] Collected %d series, %d input specs",
                      self.name, len(data), len(spec.input_specs))
-        return spec, data
+        return DataSource(spec=spec, data=data)
 
 
 # ── Z-score helper for full series ───────────────────────────────────────
@@ -244,16 +245,16 @@ class FREDCollector(BaseCollector):
             "series": sorted(self.series_ids) if self.series_ids else "all",
         }
 
-    def _fetch(self) -> tuple[DatasetSpec, dict[str, torch.Tensor]]:
+    def _fetch(self) -> DataSource:
         try:
             from fredapi import Fred
         except ImportError:
             logger.warning("fredapi not installed. Install with: pip install fredapi")
-            return DatasetSpec(name=self.name), {}
+            return DataSource(spec=DatasetSpec(name=self.name), data={})
 
         if not self.api_key:
             logger.warning("No FRED API key. Set FRED_API_KEY env var or pass api_key.")
-            return DatasetSpec(name=self.name), {}
+            return DataSource(spec=DatasetSpec(name=self.name), data={})
 
         fred = Fred(api_key=self.api_key)
 
@@ -317,7 +318,7 @@ class FREDCollector(BaseCollector):
             weight=1.0,
         )
 
-        return spec, data_dict
+        return DataSource(spec=spec, data=data_dict)
 
 
 # ── Yahoo Finance Collector ──────────────────────────────────────────────
@@ -374,12 +375,12 @@ class YahooFinanceCollector(BaseCollector):
             "crypto": self.include_crypto,
         }
 
-    def _fetch(self) -> tuple[DatasetSpec, dict[str, torch.Tensor]]:
+    def _fetch(self) -> DataSource:
         try:
             import yfinance as yf
         except ImportError:
             logger.warning("yfinance not installed. Install with: pip install yfinance")
-            return DatasetSpec(name=self.name), {}
+            return DataSource(spec=DatasetSpec(name=self.name), data={})
 
         # Build ticker -> (field_path, sub_idx) map
         all_fields: dict[str, tuple[str, int | None]] = {}
@@ -402,7 +403,7 @@ class YahooFinanceCollector(BaseCollector):
 
         ticker_list = list(all_fields.keys())
         if not ticker_list:
-            return DatasetSpec(name=self.name), {}
+            return DataSource(spec=DatasetSpec(name=self.name), data={})
 
         # Download all tickers at once
         logger.info("[YahooFinance] Downloading %d tickers...", len(ticker_list))
@@ -416,11 +417,11 @@ class YahooFinanceCollector(BaseCollector):
             )
         except Exception as exc:
             logger.warning("[YahooFinance] Download failed: %s", exc)
-            return DatasetSpec(name=self.name), {}
+            return DataSource(spec=DatasetSpec(name=self.name), data={})
 
         if data.empty:
             logger.warning("[YahooFinance] Downloaded data is empty")
-            return DatasetSpec(name=self.name), {}
+            return DataSource(spec=DatasetSpec(name=self.name), data={})
 
         input_specs: list[InputSpec] = []
         output_specs: list[OutputSpec] = []
@@ -472,7 +473,7 @@ class YahooFinanceCollector(BaseCollector):
             weight=1.0,
         )
 
-        return spec, data_dict
+        return DataSource(spec=spec, data=data_dict)
 
 
 # ── Synthetic Collector ──────────────────────────────────────────────────
@@ -671,7 +672,7 @@ class SyntheticCollector(BaseCollector):
             "seed": self.seed,
         }
 
-    def _fetch(self) -> tuple[DatasetSpec, dict[str, torch.Tensor]]:
+    def _fetch(self) -> DataSource:
         rng = np.random.default_rng(self.seed)
 
         all_data: dict[str, torch.Tensor] = {}
@@ -720,7 +721,7 @@ class SyntheticCollector(BaseCollector):
 
         logger.info("[Synthetic] Generated %d series, %d timesteps each",
                      len(all_data), self.n_timesteps)
-        return spec, all_data
+        return DataSource(spec=spec, data=all_data)
 
 
 # ── World Bank Collector ──────────────────────────────────────────────────
@@ -793,12 +794,12 @@ class WorldBankCollector(BaseCollector):
             "end_year": self.end_year or "latest",
         }
 
-    def _fetch(self) -> tuple[DatasetSpec, dict[str, torch.Tensor]]:
+    def _fetch(self) -> DataSource:
         try:
             import requests
         except ImportError:
             logger.warning("requests not installed. Install with: pip install requests")
-            return DatasetSpec(name=self.name), {}
+            return DataSource(spec=DatasetSpec(name=self.name), data={})
 
         input_specs: list[InputSpec] = []
         output_specs: list[OutputSpec] = []
@@ -880,7 +881,7 @@ class WorldBankCollector(BaseCollector):
             weight=0.8,
         )
 
-        return spec, data_dict
+        return DataSource(spec=spec, data=data_dict)
 
 
 # ── NOAA Climate Collector ───────────────────────────────────────────────
@@ -929,19 +930,19 @@ class NOAAClimateCollector(BaseCollector):
             "end_date": self.end_date or "latest",
         }
 
-    def _fetch(self) -> tuple[DatasetSpec, dict[str, torch.Tensor]]:
+    def _fetch(self) -> DataSource:
         try:
             import requests
         except ImportError:
             logger.warning("requests not installed. Install with: pip install requests")
-            return DatasetSpec(name=self.name), {}
+            return DataSource(spec=DatasetSpec(name=self.name), data={})
 
         if not self.api_key:
             logger.warning(
                 "No NOAA API key. Set NOAA_API_KEY env var or pass api_key. "
                 "Get a free key at https://www.ncdc.noaa.gov/cdo-web/token"
             )
-            return DatasetSpec(name=self.name), {}
+            return DataSource(spec=DatasetSpec(name=self.name), data={})
 
         input_specs: list[InputSpec] = []
         output_specs: list[OutputSpec] = []
@@ -1030,7 +1031,7 @@ class NOAAClimateCollector(BaseCollector):
             weight=0.6,
         )
 
-        return spec, data_dict
+        return DataSource(spec=spec, data=data_dict)
 
     def _fetch_co2(
         self,
@@ -1190,12 +1191,12 @@ class IMFCollector(BaseCollector):
             "end_year": self.end_year or "latest",
         }
 
-    def _fetch(self) -> tuple[DatasetSpec, dict[str, torch.Tensor]]:
+    def _fetch(self) -> DataSource:
         try:
             import requests
         except ImportError:
             logger.warning("requests not installed. Install with: pip install requests")
-            return DatasetSpec(name=self.name), {}
+            return DataSource(spec=DatasetSpec(name=self.name), data={})
 
         input_specs: list[InputSpec] = []
         output_specs: list[OutputSpec] = []
@@ -1272,7 +1273,7 @@ class IMFCollector(BaseCollector):
             weight=0.8,
         )
 
-        return spec, data_dict
+        return DataSource(spec=spec, data=data_dict)
 
     @staticmethod
     def _extract_observations(
@@ -1411,12 +1412,12 @@ class BISCollector(BaseCollector):
             "end_period": self.end_period or "latest",
         }
 
-    def _fetch(self) -> tuple[DatasetSpec, dict[str, torch.Tensor]]:
+    def _fetch(self) -> DataSource:
         try:
             import requests
         except ImportError:
             logger.warning("requests not installed. Install with: pip install requests")
-            return DatasetSpec(name=self.name), {}
+            return DataSource(spec=DatasetSpec(name=self.name), data={})
 
         input_specs: list[InputSpec] = []
         output_specs: list[OutputSpec] = []
@@ -1484,7 +1485,7 @@ class BISCollector(BaseCollector):
             weight=0.7,
         )
 
-        return spec, data_dict
+        return DataSource(spec=spec, data=data_dict)
 
     @staticmethod
     def _extract_sdmx_values(payload: dict) -> list[float]:
@@ -1534,7 +1535,7 @@ def collect_all(
     cache_dir: str | Path | None = None,
     force_refresh: bool = False,
     include_synthetic: bool = True,
-) -> list[tuple[DatasetSpec, dict[str, torch.Tensor]]]:
+) -> list[DataSource]:
     """Run all available collectors and return their results.
 
     This convenience function instantiates each collector with the
@@ -1555,11 +1556,10 @@ def collect_all(
         include_synthetic: If True, include SyntheticCollector output.
 
     Returns:
-        List of (DatasetSpec, dict[str, torch.Tensor]) tuples, one per
-        collector that returned data.
+        List of DataSource objects, one per collector that returned data.
     """
     api_keys = api_keys or {}
-    results: list[tuple[DatasetSpec, dict[str, torch.Tensor]]] = []
+    results: list[DataSource] = []
 
     # Extract start year from start_date for collectors that use year params
     start_year = int(start_date.split("-")[0]) if start_date else 2000
@@ -1573,9 +1573,9 @@ def collect_all(
         cache_dir=cache_dir,
         force_refresh=force_refresh,
     )
-    spec, data = fred.collect()
-    if data:
-        results.append((spec, data))
+    result = fred.collect()
+    if result.data:
+        results.append(result)
     else:
         logger.info("FREDCollector returned no data (missing key or fredapi?)")
 
@@ -1588,9 +1588,9 @@ def collect_all(
         cache_dir=cache_dir,
         force_refresh=force_refresh,
     )
-    spec, data = yahoo.collect()
-    if data:
-        results.append((spec, data))
+    result = yahoo.collect()
+    if result.data:
+        results.append(result)
     else:
         logger.info("YahooFinanceCollector returned no data (missing yfinance?)")
 
@@ -1601,9 +1601,9 @@ def collect_all(
         cache_dir=cache_dir,
         force_refresh=force_refresh,
     )
-    spec, data = world_bank.collect()
-    if data:
-        results.append((spec, data))
+    result = world_bank.collect()
+    if result.data:
+        results.append(result)
     else:
         logger.info("WorldBankCollector returned no data")
 
@@ -1616,9 +1616,9 @@ def collect_all(
         cache_dir=cache_dir,
         force_refresh=force_refresh,
     )
-    spec, data = noaa.collect()
-    if data:
-        results.append((spec, data))
+    result = noaa.collect()
+    if result.data:
+        results.append(result)
     else:
         logger.info("NOAAClimateCollector returned no data (missing NOAA API key?)")
 
@@ -1629,9 +1629,9 @@ def collect_all(
         cache_dir=cache_dir,
         force_refresh=force_refresh,
     )
-    spec, data = imf.collect()
-    if data:
-        results.append((spec, data))
+    result = imf.collect()
+    if result.data:
+        results.append(result)
     else:
         logger.info("IMFCollector returned no data")
 
@@ -1642,9 +1642,9 @@ def collect_all(
         cache_dir=cache_dir,
         force_refresh=force_refresh,
     )
-    spec, data = bis.collect()
-    if data:
-        results.append((spec, data))
+    result = bis.collect()
+    if result.data:
+        results.append(result)
     else:
         logger.info("BISCollector returned no data")
 
@@ -1655,9 +1655,9 @@ def collect_all(
             cache_dir=cache_dir,
             force_refresh=force_refresh,
         )
-        spec, data = synth.collect()
-        if data:
-            results.append((spec, data))
+        result = synth.collect()
+        if result.data:
+            results.append(result)
 
     logger.info("collect_all complete: %d sources with data", len(results))
     return results

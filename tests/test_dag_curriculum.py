@@ -7,10 +7,10 @@ from pathlib import Path
 import pytest
 import torch
 
-from general_unified_world_model.projection.subset import WorldProjection, project
+from general_unified_world_model.projection.subset import project
 from general_unified_world_model.training.backbone import build_world_model
 from general_unified_world_model.training.heterogeneous import (
-    DatasetSpec, InputSpec, OutputSpec, FieldEncoder, FieldDecoder,
+    DatasetSpec, DataSource, InputSpec, OutputSpec, FieldEncoder, FieldDecoder,
 )
 from general_unified_world_model.training.dag_curriculum import (
     TrainingNode, DAGCurriculumTrainer, DAGCheckpoint,
@@ -144,8 +144,7 @@ class TestTopoSort:
 class TestWeightMerging:
     def test_merge_identical_backbones(self):
         """Merging two identical backbones should produce the same weights."""
-        proj = WorldProjection(include=["financial.yield_curves"])
-        bound = project(proj, T=1, H=24, W=24, d_model=32)
+        bound = project(include=["financial.yield_curves"], T=1, H=24, W=24, d_model=32)
 
         bb1 = build_world_model(bound, n_layers=2, n_loops=1)
         bb2 = build_world_model(bound, n_layers=2, n_loops=1)
@@ -173,8 +172,7 @@ class TestWeightMerging:
 
     def test_merge_averages_weights(self):
         """Merging two backbones should average their parameters."""
-        proj = WorldProjection(include=["financial.yield_curves"])
-        bound = project(proj, T=1, H=24, W=24, d_model=32)
+        bound = project(include=["financial.yield_curves"], T=1, H=24, W=24, d_model=32)
 
         bb1 = build_world_model(bound, n_layers=2, n_loops=1)
         bb2 = build_world_model(bound, n_layers=2, n_loops=1)
@@ -274,8 +272,8 @@ class TestEndToEndTraining:
         )
 
         data_sources = {
-            "synth_a": (spec_a, {"ten_year": torch.randn(20)}),
-            "synth_b": (spec_b, {"regime_val": torch.randn(20)}),
+            "synth_a": DataSource(spec=spec_a, data={"ten_year": torch.randn(20)}),
+            "synth_b": DataSource(spec=spec_b, data={"regime_val": torch.randn(20)}),
         }
 
         trainer = DAGCurriculumTrainer(

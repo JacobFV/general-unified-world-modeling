@@ -9,11 +9,11 @@ Run: python examples/03_government_policy.py
 """
 
 from canvas_engineering import ConnectivityPolicy
-from general_unified_world_model.projection.subset import WorldProjection, project
+from general_unified_world_model.projection.subset import project
 from general_unified_world_model.schema.country import Country
 
 # Government analyst's specification
-proj = WorldProjection(
+bound = project(
     include=[
         # Full US macroeconomy
         "country_us",
@@ -60,9 +60,9 @@ proj = WorldProjection(
         parent_child="hub_spoke",
         temporal="dense",
     ),
-)
 
-bound = project(proj, T=1, H=96, W=96, d_model=64)
+    T=1, H=96, W=96, d_model=64,
+)
 
 print("=" * 70)
 print("Government Policy Analysis — Canvas Schema")

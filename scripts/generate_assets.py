@@ -22,7 +22,9 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from general_unified_world_model import WorldProjection, project, World
+from general_unified_world_model import project, World
+from general_unified_world_model.schema.business import Business
+from general_unified_world_model.schema.individual import Individual
 from general_unified_world_model.rendering import (
     CanvasHeatmapRenderer,
     TopologyGraphRenderer,
@@ -62,11 +64,11 @@ def render_canvas_full():
 def render_canvas_macro():
     """Macro model projection canvas."""
     print("Rendering: canvas_macro_projection...")
-    proj = WorldProjection(
+    bound = project(
         include=["country_us.macro", "financial.yield_curves", "financial.credit",
                  "regime", "forecasts.macro"],
+        T=1, H=32, W=32, d_model=64,
     )
-    bound = project(proj, T=1, H=32, W=32, d_model=64)
     ctx = RenderContext(
         bound_schema=bound,
         title=f"Macro Model Projection — {len(bound.field_names)} fields on 32x32",
@@ -78,12 +80,12 @@ def render_canvas_macro():
 def render_topology_macro():
     """Macro model topology graph."""
     print("Rendering: topology_macro...")
-    proj = WorldProjection(
+    bound = project(
         include=["country_us.macro", "financial.yield_curves", "financial.credit",
                  "financial.central_banks", "regime", "forecasts.macro",
                  "narratives.public", "events"],
+        T=1, H=48, W=48, d_model=64,
     )
-    bound = project(proj, T=1, H=48, W=48, d_model=64)
     ctx = RenderContext(
         bound_schema=bound,
         title="Macroeconomic Model — Domain Topology",
@@ -95,13 +97,13 @@ def render_topology_macro():
 def render_topology_hedge_fund():
     """Hedge fund model topology graph."""
     print("Rendering: topology_hedge_fund...")
-    proj = WorldProjection(
+    bound = project(
         include=["financial", "country_us.macro", "country_cn.macro",
                  "regime", "forecasts.macro", "forecasts.financial",
                  "narratives.positioning", "events", "trust"],
-        firms=["AAPL", "NVDA"],
+        entities={"firm_AAPL": Business(), "firm_NVDA": Business()},
+        T=1, H=64, W=64, d_model=64,
     )
-    bound = project(proj, T=1, H=64, W=64, d_model=64)
     ctx = RenderContext(
         bound_schema=bound,
         title=f"Hedge Fund Model — {len(bound.field_names)} fields, multi-domain topology",
@@ -113,8 +115,7 @@ def render_topology_hedge_fund():
 def render_financial_charts():
     """Financial charts with demo data."""
     print("Rendering: financial_charts...")
-    proj = WorldProjection(include=["financial"])
-    bound = project(proj, T=1, H=32, W=32, d_model=64)
+    bound = project(include=["financial"], T=1, H=32, W=32, d_model=64)
     ctx = RenderContext(
         bound_schema=bound,
         title="Financial Markets — World Model Time Series",
@@ -126,8 +127,7 @@ def render_financial_charts():
 def render_geopolitical_map():
     """Geopolitical state map with vector-to-RGB projection (static + GIF)."""
     print("Rendering: geopolitical_map...")
-    proj = WorldProjection(include=["*"])
-    bound = project(proj, T=1, H=128, W=128, d_model=64)
+    bound = project(include=["*"], T=1, H=128, W=128, d_model=64)
     ctx = RenderContext(
         bound_schema=bound,
         title="Geopolitical State — Vector Projection to RGB",
@@ -150,8 +150,7 @@ def render_geopolitical_map():
 def render_regime_dashboard():
     """Regime state dashboard — minimal bars."""
     print("Rendering: regime_dashboard...")
-    proj = WorldProjection(include=["regime", "forecasts"])
-    bound = project(proj, T=1, H=24, W=24, d_model=64)
+    bound = project(include=["regime", "forecasts"], T=1, H=24, W=24, d_model=64)
     ctx = RenderContext(
         bound_schema=bound,
         title="regime state",
@@ -163,13 +162,16 @@ def render_regime_dashboard():
 def render_social_graph():
     """CEO perspective social graph."""
     print("Rendering: social_graph_ceo...")
-    proj = WorldProjection(
+    bound = project(
         include=["country_us.macro", "sector_tech", "financial.equities",
                  "regime", "forecasts.business", "narratives.elites"],
-        firms=["ACME", "RIVAL"],
-        individuals=["ceo", "cfo", "board_chair"],
+        entities={
+            "firm_ACME": Business(), "firm_RIVAL": Business(),
+            "person_ceo": Individual(), "person_cfo": Individual(),
+            "person_board_chair": Individual(),
+        },
+        T=1, H=48, W=48, d_model=64,
     )
-    bound = project(proj, T=1, H=48, W=48, d_model=64)
     ctx = RenderContext(
         bound_schema=bound,
         title="CEO Perspective — Entity Network",
@@ -181,13 +183,13 @@ def render_social_graph():
 def render_canvas_hedge_fund():
     """Hedge fund canvas for the README example."""
     print("Rendering: canvas_hedge_fund...")
-    proj = WorldProjection(
+    bound = project(
         include=["financial", "country_us.macro", "country_cn.macro",
                  "regime", "forecasts.macro", "forecasts.financial",
                  "narratives.positioning", "events"],
-        firms=["AAPL", "NVDA"],
+        entities={"firm_AAPL": Business(), "firm_NVDA": Business()},
+        T=1, H=64, W=64, d_model=64,
     )
-    bound = project(proj, T=1, H=64, W=64, d_model=64)
     ctx = RenderContext(
         bound_schema=bound,
         title=f"Hedge Fund Projection — {len(bound.field_names)} fields on 64x64",

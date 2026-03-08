@@ -38,14 +38,14 @@ from general_unified_world_model.training.dag_curriculum import (
     TrainingNode,
 )
 from general_unified_world_model.training.heterogeneous import (
-    DatasetSpec, InputSpec, OutputSpec,
+    DatasetSpec, DataSource, InputSpec, OutputSpec,
 )
 from general_unified_world_model.data.adapters import (
     fred_adapter, yahoo_finance_adapter, _io_pair, log_return,
 )
 
 
-def fetch_real_data(fred_api_key: str | None = None) -> dict[str, tuple[DatasetSpec, dict]]:
+def fetch_real_data(fred_api_key: str | None = None) -> dict[str, DataSource]:
     """Fetch all real data sources."""
     sources = {}
 
@@ -57,7 +57,7 @@ def fetch_real_data(fred_api_key: str | None = None) -> dict[str, tuple[DatasetS
                 api_key=fred_api_key,
                 start_date="2000-01-01",
             )
-            sources["fred_macro"] = (fred_spec, fred_data)
+            sources["fred_macro"] = DataSource(spec=fred_spec, data=fred_data)
             print(f"  FRED macro: {len(fred_spec.input_specs)} series, "
                   f"{sum(v.shape[0] for v in fred_data.values())} total rows")
 
@@ -69,14 +69,14 @@ def fetch_real_data(fred_api_key: str | None = None) -> dict[str, tuple[DatasetS
             rate_specs_in = [s for s in fred_spec.input_specs if s.key in rate_keys]
             rate_specs_out = [s for s in fred_spec.output_specs if s.key in rate_keys]
             if rate_data:
-                sources["fred_rates"] = (
-                    DatasetSpec(
+                sources["fred_rates"] = DataSource(
+                    spec=DatasetSpec(
                         name="FRED Rates",
                         description="US Treasury yields, credit spreads, monetary policy",
                         input_specs=rate_specs_in,
                         output_specs=rate_specs_out,
                     ),
-                    rate_data,
+                    data=rate_data,
                 )
                 print(f"  FRED rates: {len(rate_specs_in)} series")
         except Exception as e:
@@ -95,7 +95,7 @@ def fetch_real_data(fred_api_key: str | None = None) -> dict[str, tuple[DatasetS
             include_commodities=True,
             include_crypto=True,
         )
-        sources["yahoo_finance"] = (yahoo_spec, yahoo_data)
+        sources["yahoo_finance"] = DataSource(spec=yahoo_spec, data=yahoo_data)
         print(f"  Yahoo Finance: {len(yahoo_spec.input_specs)} tickers")
 
         # Split commodities
@@ -104,14 +104,14 @@ def fetch_real_data(fred_api_key: str | None = None) -> dict[str, tuple[DatasetS
         commodity_specs_in = [s for s in yahoo_spec.input_specs if s.key in commodity_keys]
         commodity_specs_out = [s for s in yahoo_spec.output_specs if s.key in commodity_keys]
         if commodity_data:
-            sources["yahoo_commodities"] = (
-                DatasetSpec(
+            sources["yahoo_commodities"] = DataSource(
+                spec=DatasetSpec(
                     name="Yahoo Commodities",
                     description="Commodity futures: energy, metals",
                     input_specs=commodity_specs_in,
                     output_specs=commodity_specs_out,
                 ),
-                commodity_data,
+                data=commodity_data,
             )
             print(f"  Yahoo Commodities: {len(commodity_specs_in)} tickers")
     except Exception as e:
@@ -123,14 +123,14 @@ def fetch_real_data(fred_api_key: str | None = None) -> dict[str, tuple[DatasetS
     n = 5000
     news_emb = torch.randn(n, 32)
     inp, out = _io_pair("news_emb", "events.news_embedding")
-    sources["news_embeddings"] = (
-        DatasetSpec(
+    sources["news_embeddings"] = DataSource(
+        spec=DatasetSpec(
             name="News Embeddings",
             description="Synthetic news article embeddings",
             input_specs=[inp],
             output_specs=[out],
         ),
-        {"news_emb": news_emb},
+        data={"news_emb": news_emb},
     )
     print(f"  News embeddings: {n} samples, dim=32")
 
@@ -157,9 +157,9 @@ def _synthetic_macro():
         OutputSpec(key=s.key, semantic_type=s.semantic_type, field_path=s.field_path)
         for s in input_specs
     ]
-    sources["fred_macro"] = (
-        DatasetSpec(name="Synthetic Macro", input_specs=input_specs, output_specs=output_specs),
-        data,
+    sources["fred_macro"] = DataSource(
+        spec=DatasetSpec(name="Synthetic Macro", input_specs=input_specs, output_specs=output_specs),
+        data=data,
     )
     return sources
 
@@ -182,9 +182,9 @@ def _synthetic_markets():
         for s in input_specs
     ]
     return {
-        "yahoo_finance": (
-            DatasetSpec(name="Synthetic Markets", input_specs=input_specs, output_specs=output_specs),
-            data,
+        "yahoo_finance": DataSource(
+            spec=DatasetSpec(name="Synthetic Markets", input_specs=input_specs, output_specs=output_specs),
+            data=data,
         ),
     }
 
@@ -269,9 +269,9 @@ def main():
     print("=" * 60)
     data_sources = fetch_real_data(fred_api_key=args.fred_key)
     print(f"\nTotal data sources: {len(data_sources)}")
-    for name, (spec, data) in data_sources.items():
-        n_series = len(spec.input_specs)
-        n_rows = max((v.shape[0] for v in data.values() if isinstance(v, torch.Tensor) and v.dim() >= 1), default=0)
+    for name, ds in data_sources.items():
+        n_series = len(ds.spec.input_specs)
+        n_rows = max((v.shape[0] for v in ds.data.values() if isinstance(v, torch.Tensor) and v.dim() >= 1), default=0)
         print(f"  {name}: {n_series} series, ~{n_rows} rows")
 
     # Build DAG

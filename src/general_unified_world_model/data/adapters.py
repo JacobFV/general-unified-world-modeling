@@ -4,7 +4,7 @@ Each adapter knows how to:
 1. Fetch data from a specific source (FRED, Yahoo Finance, etc.)
 2. Map source columns to world model field paths
 3. Normalize values to [0, 1] or z-score
-4. Return a (DatasetSpec, data_dict) pair ready for HeterogeneousDataset
+4. Return a DataSource ready for training
 
 These adapters are the bridge between messy real-world data and the
 clean typed ontology of the world model.
@@ -18,7 +18,7 @@ from typing import Optional
 import numpy as np
 import torch
 
-from general_unified_world_model.training.heterogeneous import DatasetSpec, InputSpec, OutputSpec, _infer_semantic_type
+from general_unified_world_model.training.heterogeneous import DatasetSpec, DataSource, InputSpec, OutputSpec, _infer_semantic_type
 from general_unified_world_model.schema.temporal_constants import (
     TICK, DAILY, WEEKLY, MONTHLY, QUARTERLY,
 )
@@ -158,7 +158,7 @@ def fred_adapter(
     start_date: str = "2000-01-01",
     end_date: str | None = None,
     cache_dir: str | None = None,
-) -> tuple[DatasetSpec, dict[str, torch.Tensor]]:
+) -> DataSource:
     """Build a DatasetSpec + data dict from FRED series.
 
     Args:
@@ -219,7 +219,7 @@ def fred_adapter(
         weight=1.0,
     )
 
-    return spec, data_dict
+    return DataSource(spec=spec, data=data_dict)
 
 
 # ── Yahoo Finance Adapter ───────────────────────────────────────────────
@@ -262,7 +262,7 @@ def yahoo_finance_adapter(
     include_commodities: bool = True,
     include_crypto: bool = True,
     firm_tickers: dict[str, str] | None = None,
-) -> tuple[DatasetSpec, dict[str, torch.Tensor]]:
+) -> DataSource:
     """Build DatasetSpec from Yahoo Finance.
 
     Args:
@@ -305,7 +305,7 @@ def yahoo_finance_adapter(
 
     ticker_list = list(all_fields.keys())
     if not ticker_list:
-        return DatasetSpec(name="Yahoo Finance", description="Yahoo Finance: equities, FX, commodities, crypto prices"), {}
+        return DataSource(spec=DatasetSpec(name="Yahoo Finance", description="Yahoo Finance: equities, FX, commodities, crypto prices"), data={})
 
     # Download
     data = yf.download(
@@ -350,7 +350,7 @@ def yahoo_finance_adapter(
         weight=1.0,
     )
 
-    return spec, data_dict
+    return DataSource(spec=spec, data=data_dict)
 
 
 # ── PMI Adapter (ISM) ───────────────────────────────────────────────────
@@ -358,7 +358,7 @@ def yahoo_finance_adapter(
 def pmi_adapter(
     data: dict[str, torch.Tensor],
     country: str = "us",
-) -> tuple[DatasetSpec, dict[str, torch.Tensor]]:
+) -> DataSource:
     """Adapter for PMI / ISM survey data.
 
     Args:
@@ -393,7 +393,7 @@ def pmi_adapter(
         weight=1.5,  # PMI is highly informative
     )
 
-    return spec, data
+    return DataSource(spec=spec, data=data)
 
 
 # ── Earnings Adapter ─────────────────────────────────────────────────────
@@ -401,7 +401,7 @@ def pmi_adapter(
 def earnings_adapter(
     firm_name: str,
     data: dict[str, torch.Tensor],
-) -> tuple[DatasetSpec, dict[str, torch.Tensor]]:
+) -> DataSource:
     """Adapter for quarterly earnings data for a specific firm.
 
     Args:
@@ -438,7 +438,7 @@ def earnings_adapter(
         weight=2.0,
     )
 
-    return spec, data
+    return DataSource(spec=spec, data=data)
 
 
 # ── News Embedding Adapter ──────────────────────────────────────────────
@@ -446,7 +446,7 @@ def earnings_adapter(
 def news_adapter(
     embeddings: torch.Tensor,
     timestamps: Optional[torch.Tensor] = None,
-) -> tuple[DatasetSpec, dict[str, torch.Tensor]]:
+) -> DataSource:
     """Adapter for pre-computed news embeddings.
 
     Args:
@@ -469,7 +469,7 @@ def news_adapter(
         weight=0.5,
     )
 
-    return spec, data
+    return DataSource(spec=spec, data=data)
 
 
 # ── Generic CSV/Parquet Adapter ──────────────────────────────────────────
@@ -481,7 +481,7 @@ def tabular_adapter(
     transforms: dict[str, str] | None = None,
     base_period: int = 1,
     weight: float = 1.0,
-) -> tuple[DatasetSpec, dict[str, torch.Tensor]]:
+) -> DataSource:
     """Generic adapter for CSV/Parquet files with explicit column mappings.
 
     Args:
@@ -546,4 +546,4 @@ def tabular_adapter(
         weight=weight,
     )
 
-    return spec, data_dict
+    return DataSource(spec=spec, data=data_dict)

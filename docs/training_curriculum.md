@@ -38,7 +38,7 @@ into small parallel tasks that are later merged via weight averaging.
 ### 2.1 Overview
 
 The curriculum is a directed acyclic graph (DAG) where each node is a
-training run on a specific WorldProjection (a subset of the full schema).
+training run on a specific schema projection (a subset of the full schema).
 There are two node types:
 
 - **Fork nodes** duplicate the current model weights and dispatch copies to
@@ -109,7 +109,7 @@ weight function (see Section 7).
 
 Each DAG node is described by a natural language string. This description is
 passed to `llm_project()` (in `llm/projection_builder.py`), which calls an
-LLM to select the appropriate `WorldProjection`:
+LLM to select the appropriate include paths, entities, and exclusions:
 
 ```python
 from general_unified_world_model.llm import llm_project
@@ -942,7 +942,7 @@ key additions are:
 4. **Semantic embedding conditioning** to enable merge compatibility.
 5. **Checkpointing with full metadata** for reproducibility.
 
-The existing `WorldProjection`, `project()`, `WorldModelBackbone`,
+The existing `project()`, `WorldModelBackbone`,
 `FieldEncoder`, `FieldDecoder`, `MaskedCanvasTrainer`, and
 `HeterogeneousDataset` are all reused without modification. The DAG
 curriculum is an orchestration layer on top of these components.

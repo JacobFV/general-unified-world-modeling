@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import torch
 
-from general_unified_world_model import WorldProjection, project, World
+from general_unified_world_model import project, World, DataSource
 from general_unified_world_model.training.backbone import build_world_model
 from general_unified_world_model.training.heterogeneous import (
     FieldEncoder, FieldDecoder, MaskedCanvasTrainer,
@@ -69,8 +69,7 @@ def test_schema_and_semantic():
 def test_semantic_conditioner():
     """Test 2: SemanticConditioner with random embeddings."""
     print("\n2. SemanticConditioner")
-    proj = WorldProjection(include=["financial", "regime"])
-    bound = project(proj, T=1, H=24, W=24, d_model=32)
+    bound = project(include=["financial", "regime"], T=1, H=24, W=24, d_model=32)
 
     embed_dim = 16
 
@@ -94,8 +93,7 @@ def test_semantic_conditioner():
 def test_backbone_with_conditioning():
     """Test 3: Backbone forward/backward with semantic conditioning."""
     print("\n3. Backbone + Semantic Conditioning")
-    proj = WorldProjection(include=["financial", "regime"])
-    bound = project(proj, T=1, H=24, W=24, d_model=32)
+    bound = project(include=["financial", "regime"], T=1, H=24, W=24, d_model=32)
 
     def random_embed(texts):
         return [torch.randn(16).tolist() for _ in texts]
@@ -127,8 +125,7 @@ def test_backbone_with_conditioning():
 def test_heterogeneous_training():
     """Test 4: Masked canvas training with synthetic data."""
     print("\n4. Heterogeneous Training (synthetic)")
-    proj = WorldProjection(include=["financial.yield_curves", "regime"])
-    bound = project(proj, T=1, H=24, W=24, d_model=32)
+    bound = project(include=["financial.yield_curves", "regime"], T=1, H=24, W=24, d_model=32)
 
     # Create synthetic data
     spec = DatasetSpec(
@@ -161,7 +158,7 @@ def test_heterogeneous_training():
         bound, backbone, encoder, decoder, optimizer, device="cpu"
     )
 
-    dataloader = build_mixed_dataloader(bound, [(spec, data)], batch_size=4)
+    dataloader = build_mixed_dataloader(bound, [DataSource(spec=spec, data=data)], batch_size=4)
 
     with timer("3 training steps"):
         for i, batch in enumerate(dataloader):
@@ -175,8 +172,7 @@ def test_heterogeneous_training():
 def test_diffusion_training():
     """Test 5: Diffusion training step."""
     print("\n5. Diffusion Training")
-    proj = WorldProjection(include=["financial.yield_curves", "regime"])
-    bound = project(proj, T=1, H=24, W=24, d_model=32)
+    bound = project(include=["financial.yield_curves", "regime"], T=1, H=24, W=24, d_model=32)
 
     backbone = build_world_model(bound, n_layers=2, n_loops=1)
     schedule = CosineNoiseSchedule(n_steps=100)
@@ -252,8 +248,8 @@ def test_dag_curriculum():
     )
 
     data_sources = {
-        "synthetic_finance": (finance_spec, {"ten_year": torch.randn(20)}),
-        "synthetic_macro": (macro_spec, {"regime_val": torch.randn(20)}),
+        "synthetic_finance": DataSource(spec=finance_spec, data={"ten_year": torch.randn(20)}),
+        "synthetic_macro": DataSource(spec=macro_spec, data={"regime_val": torch.randn(20)}),
     }
 
     with timer("DAG training"):
@@ -284,8 +280,7 @@ def test_inference():
     print("\n7. Inference")
     from general_unified_world_model.inference import WorldModel
 
-    proj = WorldProjection(include=["financial.yield_curves", "regime"])
-    bound = project(proj, T=1, H=24, W=24, d_model=32)
+    bound = project(include=["financial.yield_curves", "regime"], T=1, H=24, W=24, d_model=32)
 
     # Create a mock model (untrained)
     backbone = build_world_model(bound, n_layers=2, n_loops=1)
@@ -305,8 +300,7 @@ def test_fog_regions():
     """Test 8: Coarse-grained regions for partial projections."""
     print("\n8. Coarse-Grained Regions")
     with timer("coarse-grained projection"):
-        proj = WorldProjection(include=["financial.yield_curves", "regime"])
-        bound = project(proj, T=1, H=24, W=24, d_model=32)
+        bound = project(include=["financial.yield_curves", "regime"], T=1, H=24, W=24, d_model=32)
 
     # Coarse-grained siblings should exist with original names
     coarse_names = ["financial.credit", "financial.fx", "financial.liquidity",

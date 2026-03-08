@@ -6,7 +6,7 @@ matplotlib.use("Agg")
 import pytest
 import torch
 
-from general_unified_world_model import WorldProjection, project
+from general_unified_world_model import project
 from general_unified_world_model.rendering import (
     CanvasHeatmapRenderer,
     TopologyGraphRenderer,
@@ -25,15 +25,13 @@ from general_unified_world_model.rendering import (
 
 @pytest.fixture
 def financial_ctx():
-    proj = WorldProjection(include=["financial", "regime"])
-    bound = project(proj, T=1, H=24, W=24, d_model=32)
+    bound = project(include=["financial", "regime"], T=1, H=24, W=24, d_model=32)
     return RenderContext(bound_schema=bound)
 
 
 @pytest.fixture
 def full_ctx():
-    proj = WorldProjection(include=["*"])
-    bound = project(proj, T=1, H=128, W=128, d_model=64)
+    bound = project(include=["*"], T=1, H=128, W=128, d_model=64)
     return RenderContext(bound_schema=bound)
 
 
@@ -41,15 +39,15 @@ def full_ctx():
 def ceo_ctx():
     from general_unified_world_model.schema.business import Business
     from general_unified_world_model.schema.individual import Individual
-    proj = WorldProjection(
+    bound = project(
         include=["country_us.macro", "sector_tech", "financial.equities", "regime", "forecasts"],
         entities={
             "firm_ACME": Business(),
             "person_ceo": Individual(),
             "person_cfo": Individual(),
         },
+        T=1, H=48, W=48, d_model=32,
     )
-    bound = project(proj, T=1, H=48, W=48, d_model=32)
     return RenderContext(bound_schema=bound)
 
 

@@ -18,7 +18,7 @@ from general_unified_world_model.data.collectors import (
     _log_returns_tensor,
     _pct_change_tensor,
 )
-from general_unified_world_model.training.heterogeneous import DatasetSpec
+from general_unified_world_model.training.heterogeneous import DatasetSpec, DataSource
 
 
 # ── Helper functions ──────────────────────────────────────────────────────
@@ -100,12 +100,13 @@ class TestSyntheticCollector:
         collector = SyntheticCollector(
             n_timesteps=50, seed=42, cache_dir=cache_dir, force_refresh=True
         )
-        spec, data = collector.collect()
+        result = collector.collect()
 
-        assert isinstance(spec, DatasetSpec)
-        assert spec.name == "Synthetic"
-        assert len(spec.input_specs) > 0
-        assert len(data) > 0
+        assert isinstance(result, DataSource)
+        assert isinstance(result.spec, DatasetSpec)
+        assert result.spec.name == "Synthetic"
+        assert len(result.spec.input_specs) > 0
+        assert len(result.data) > 0
 
         # Check a few expected fields
         expected_fields = [
@@ -114,36 +115,36 @@ class TestSyntheticCollector:
             "regime.growth_regime",
         ]
         for f in expected_fields:
-            assert f in data, f"Missing field: {f}"
-            assert data[f].shape == (50,)
+            assert f in result.data, f"Missing field: {f}"
+            assert result.data[f].shape == (50,)
 
     def test_caching(self):
         cache_dir = tempfile.mkdtemp()
         c1 = SyntheticCollector(n_timesteps=30, seed=0, cache_dir=cache_dir)
-        spec1, data1 = c1.collect()
+        result1 = c1.collect()
 
         # Second call should load from cache
         c2 = SyntheticCollector(n_timesteps=30, seed=0, cache_dir=cache_dir)
-        spec2, data2 = c2.collect()
+        result2 = c2.collect()
 
-        assert len(data1) == len(data2)
+        assert len(result1.data) == len(result2.data)
 
     def test_different_seeds(self):
         cache_dir = tempfile.mkdtemp()
         c1 = SyntheticCollector(n_timesteps=30, seed=1, cache_dir=cache_dir, force_refresh=True)
         c2 = SyntheticCollector(n_timesteps=30, seed=2, cache_dir=cache_dir, force_refresh=True)
-        _, data1 = c1.collect()
-        _, data2 = c2.collect()
+        result1 = c1.collect()
+        result2 = c2.collect()
         # Different seeds should produce different data
-        key = list(data1.keys())[0]
-        assert not torch.allclose(data1[key], data2[key])
+        key = list(result1.data.keys())[0]
+        assert not torch.allclose(result1.data[key], result2.data[key])
 
     def test_field_mapping_consistency(self):
         """Every mapping should point to a key in the data dict."""
         collector = SyntheticCollector(n_timesteps=20, force_refresh=True, cache_dir=tempfile.mkdtemp())
-        spec, data = collector.collect()
-        for mapping in spec.input_specs:
-            assert mapping.key in data, f"Mapping {mapping.key} not in data"
+        result = collector.collect()
+        for mapping in result.spec.input_specs:
+            assert mapping.key in result.data, f"Mapping {mapping.key} not in data"
 
 
 # ── FRED Collector (unit tests, no API) ────────────────────────────────────
@@ -159,8 +160,8 @@ class TestFREDCollector:
         import os
         old = os.environ.pop("FRED_API_KEY", None)
         try:
-            spec, data = collector.collect()
-            assert len(data) == 0
+            result = collector.collect()
+            assert len(result.data) == 0
         finally:
             if old is not None:
                 os.environ["FRED_API_KEY"] = old
@@ -186,7 +187,7 @@ class TestCollectAll:
         )
         # At minimum we should get the synthetic data
         assert len(results) >= 1
-        synth = [r for r in results if r[0].name == "Synthetic"]
+        synth = [r for r in results if r.spec.name == "Synthetic"]
         assert len(synth) == 1
 
     def test_without_synthetic(self):
@@ -196,5 +197,5 @@ class TestCollectAll:
             force_refresh=True,
             include_synthetic=False,
         )
-        synth = [r for r in results if r[0].name == "Synthetic"]
+        synth = [r for r in results if r.spec.name == "Synthetic"]
         assert len(synth) == 0

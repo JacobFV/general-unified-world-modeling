@@ -4,11 +4,11 @@ import pytest
 import torch
 import torch.nn as nn
 
-from general_unified_world_model.projection.subset import WorldProjection, project
+from general_unified_world_model.projection.subset import project
 from general_unified_world_model.training.backbone import WorldModelBackbone, build_world_model
 from general_unified_world_model.training.heterogeneous import (
     FieldEncoder, FieldDecoder, MaskedCanvasTrainer,
-    DatasetSpec, InputSpec, OutputSpec, HeterogeneousDataset,
+    DatasetSpec, DataSource, InputSpec, OutputSpec, HeterogeneousDataset,
     build_mixed_dataloader,
 )
 from general_unified_world_model.training.diffusion import (
@@ -19,8 +19,7 @@ from general_unified_world_model.training.diffusion import (
 @pytest.fixture
 def small_bound():
     """A small projection for testing."""
-    proj = WorldProjection(include=["financial.yield_curves", "regime"])
-    return project(proj, T=1, H=24, W=24, d_model=32)
+    return project(include=["financial.yield_curves", "regime"], T=1, H=24, W=24, d_model=32)
 
 
 def test_backbone_forward(small_bound):
@@ -113,7 +112,7 @@ def test_heterogeneous_dataset(small_bound):
 
     dataset = HeterogeneousDataset(
         small_bound,
-        sources=[(spec1, data1), (spec2, data2)],
+        sources=[DataSource(spec=spec1, data=data1), DataSource(spec=spec2, data=data2)],
     )
 
     assert len(dataset) > 0

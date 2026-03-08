@@ -37,14 +37,13 @@ from general_unified_world_model.training.backbone import (
     WorldModelBackbone, build_world_model,
 )
 from general_unified_world_model.training.heterogeneous import (
-    FieldEncoder, FieldDecoder, DatasetSpec, InputSpec, OutputSpec,
+    FieldEncoder, FieldDecoder, DatasetSpec, DataSource, InputSpec, OutputSpec,
+    check_coverage, CoverageReport,
 )
 from general_unified_world_model.training.diffusion import (
     DiffusionWorldModelTrainer, CosineNoiseSchedule,
 )
-from general_unified_world_model.projection.subset import (
-    WorldProjection, project,
-)
+from general_unified_world_model.projection.subset import project
 
 
 class WorldModel:
@@ -132,7 +131,8 @@ class WorldModel:
         # Current observations (field_path -> value)
         self._observations: dict[str, torch.Tensor] = {}
 
-        # Dataset specs for ingest()
+        # Data sources and dataset specs for ingest() / training
+        self._data_sources: list[DataSource] = []
         self._dataset_specs: dict[str, DatasetSpec] = {}
         if dataset_specs:
             for spec in dataset_specs:
@@ -430,14 +430,19 @@ class WorldModel:
 
     # ── Data ingestion ────────────────────────────────────────────────
 
-    def ingest(self, data: dict[str, Any], spec: DatasetSpec | str | None = None):
-        """Populate canvas from a data dict using a DatasetSpec.
+    def ingest(self, data: dict[str, Any] | DataSource,
+               spec: DatasetSpec | str | None = None):
+        """Populate canvas from a data dict or DataSource.
 
         Args:
-            data: Dict mapping column names to values (scalars, arrays, tensors).
+            data: Dict mapping column names to values, or a DataSource.
             spec: DatasetSpec, or name of a registered spec, or None to
-                auto-match keys to field paths.
+                auto-match keys to field paths. Ignored if data is a DataSource.
         """
+        if isinstance(data, DataSource):
+            spec = data.spec
+            data = data.data
+
         if isinstance(spec, str):
             spec = self._dataset_specs.get(spec)
         if spec is None:
@@ -457,9 +462,22 @@ class WorldModel:
                         value = input_spec.transform(torch.tensor(value, dtype=torch.float32))
                 self.observe(input_spec.field_path, value)
 
+    def add_data(self, source: DataSource):
+        """Add a data source for training and ingestion.
+
+        Args:
+            source: A DataSource object.
+        """
+        self._data_sources.append(source)
+        self._dataset_specs[source.name] = source.spec
+
     def register_dataset(self, spec: DatasetSpec):
         """Register a DatasetSpec for use with ingest()."""
         self._dataset_specs[spec.name] = spec
+
+    def check_coverage(self) -> CoverageReport:
+        """Check how well registered data sources cover this model's fields."""
+        return check_coverage(self._data_sources, self.bound)
 
     # ── Projection ────────────────────────────────────────────────────
 
@@ -504,8 +522,11 @@ class WorldModel:
     def load(
         cls,
         path: str | Path,
-        projection: WorldProjection | None = None,
         bound_schema=None,
+        include: list[str] | None = None,
+        exclude: list[str] | None = None,
+        entities: dict[str, Any] | None = None,
+        connectivity=None,
         T: int = 1,
         H: int = 64,
         W: int = 64,
@@ -518,8 +539,11 @@ class WorldModel:
 
         Args:
             path: Path to checkpoint file.
-            projection: WorldProjection (legacy). Provide this OR bound_schema.
             bound_schema: Pre-compiled BoundSchema. Takes precedence.
+            include: Dotted paths to include (used if bound_schema is None).
+            exclude: Dotted paths to exclude.
+            entities: Dynamic entity dict.
+            connectivity: Override connectivity policy.
             T, H, W, d_model: Canvas dimensions (must match training).
             n_layers, n_loops: Backbone architecture (must match training).
             device: Device.
@@ -528,9 +552,12 @@ class WorldModel:
             WorldModel ready for inference.
         """
         if bound_schema is None:
-            if projection is None:
-                raise ValueError("Provide either projection or bound_schema")
-            bound_schema = project(projection, T=T, H=H, W=W, d_model=d_model)
+            if include is None:
+                raise ValueError("Provide either bound_schema or include paths")
+            bound_schema = project(
+                include=include, exclude=exclude, entities=entities,
+                connectivity=connectivity, T=T, H=H, W=W, d_model=d_model,
+            )
 
         backbone = build_world_model(
             bound_schema, n_layers=n_layers, n_loops=n_loops,
@@ -618,6 +645,7 @@ class GeneralUnifiedWorldModel(WorldModel):
         W: int | None = None,
         d_model: int = 64,
         device: str = "cpu",
+        data_sources: list[DataSource] | None = None,
         dataset_specs: list[DatasetSpec] | None = None,
         connectivity: "ConnectivityPolicy | None" = None,
         **kwargs,
@@ -632,7 +660,8 @@ class GeneralUnifiedWorldModel(WorldModel):
             H, W: Canvas size. None = auto-sized.
             d_model: Latent dimension.
             device: Device.
-            dataset_specs: Additional dataset specs.
+            data_sources: Data sources for training/ingestion.
+            dataset_specs: Additional dataset specs (legacy, prefer data_sources).
             connectivity: Override connectivity policy.
             **kwargs: Passed to WorldModel (n_layers, n_heads, etc.).
         """
@@ -659,6 +688,10 @@ class GeneralUnifiedWorldModel(WorldModel):
             dataset_specs=dataset_specs,
             **kwargs,
         )
+
+        if data_sources:
+            for ds in data_sources:
+                self.add_data(ds)
 
     def _recompile(self, T, H, W, d_model):
         """Recompile with the stored World schema and projection params."""

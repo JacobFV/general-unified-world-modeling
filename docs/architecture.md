@@ -99,7 +99,7 @@ from general_unified_world_model.schema.individual import Individual
 from general_unified_world_model.schema.country import Country
 from general_unified_world_model.schema.sector import Sector
 
-proj = WorldProjection(
+bound = project(
     include=["financial", "country_us.macro"],
     entities={
         "firm_AAPL": Business(),       # creates firm_AAPL (57 fields)
@@ -108,6 +108,7 @@ proj = WorldProjection(
         "country_jp": Country(),
         "sector_semiconductors": Sector(),
     },
+    d_model=64,
 )
 ```
 
@@ -115,7 +116,7 @@ Each dynamic entity is a full dataclass instance (e.g., `Business` has 57 fields
 
 ## Projection system
 
-`WorldProjection` declares which parts of the schema to include. `project()` compiles it to a `BoundSchema` with canvas layout and topology:
+`project()` declares which parts of the schema to include and compiles them to a `BoundSchema` with canvas layout and topology:
 
 <div class="grid" markdown>
 
@@ -134,7 +135,7 @@ Each dynamic entity is a full dataclass instance (e.g., `Business` has 57 fields
 ```mermaid
 graph LR
     A["World()
-857 fields"] --> B["WorldProjection
+857 fields"] --> B["project()
 include/exclude/entities"]
     B --> C["ProjectedWorld
 subset of fields"]
@@ -145,10 +146,10 @@ layout + topology + mask"]
 ```
 
 1. Start with full `World()` instance (857 fields)
-2. Walk the dataclass tree, keeping only fields matching `include` paths
-3. Create dynamic entity instances for requested firms/individuals/etc.
-4. Build a `ProjectedWorld` dataclass containing only the active subtree
-5. Call `compile_schema(projected_world, T, H, W, d_model)` to allocate fields on the canvas grid
+2. `project()` walks the dataclass tree, keeping only fields matching `include` paths
+3. Dynamic entity instances are added for requested firms/individuals/etc.
+4. A `ProjectedWorld` dataclass is built containing only the active subtree
+5. `compile_schema(projected_world, T, H, W, d_model)` allocates fields on the canvas grid
 
 The result is a `BoundSchema` with:
 
@@ -162,7 +163,7 @@ The result is a `BoundSchema` with:
 When `H=None, W=None`, `compile_schema` auto-computes the canvas size from the number of fields:
 
 ```python
-bound = project(proj, T=1, d_model=64)  # H, W auto-sized
+bound = project(include=["financial", "regime"], T=1, d_model=64)  # H, W auto-sized
 ```
 
 ## Topology

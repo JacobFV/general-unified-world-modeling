@@ -7,7 +7,7 @@ from general_unified_world_model.data.adapters import (
     z_score, minmax, log_return, pct_change, rank_normalize,
     pmi_adapter, earnings_adapter, news_adapter,
 )
-from general_unified_world_model.training.heterogeneous import DatasetSpec, InputSpec, OutputSpec
+from general_unified_world_model.training.heterogeneous import DatasetSpec, DataSource, InputSpec, OutputSpec
 
 
 def test_z_score_transform():
@@ -55,33 +55,34 @@ def test_rank_normalize_transform():
 
 
 def test_pmi_adapter():
-    """PMI adapter should create valid DatasetSpec."""
+    """PMI adapter should create valid DataSource."""
     data = {
         "manufacturing_pmi": torch.tensor([52.1, 51.3, 53.0]),
         "services_pmi": torch.tensor([54.2, 53.8, 55.1]),
     }
-    spec, result_data = pmi_adapter(data, country="us")
-    assert isinstance(spec, DatasetSpec)
-    assert len(spec.input_specs) >= 2
-    assert spec.base_period == 192
+    result = pmi_adapter(data, country="us")
+    assert isinstance(result, DataSource)
+    assert isinstance(result.spec, DatasetSpec)
+    assert len(result.spec.input_specs) >= 2
+    assert result.spec.base_period == 192
 
 
 def test_earnings_adapter():
-    """Earnings adapter should create valid DatasetSpec for a firm."""
+    """Earnings adapter should create valid DataSource for a firm."""
     data = {
         "revenue": torch.tensor([1e9, 1.1e9, 1.2e9]),
         "gross_margin": torch.tensor([0.42, 0.43, 0.41]),
     }
-    spec, result_data = earnings_adapter("AAPL", data)
-    assert isinstance(spec, DatasetSpec)
-    assert len(spec.input_specs) >= 2
-    assert "firm_AAPL" in spec.input_specs[0].field_path
+    result = earnings_adapter("AAPL", data)
+    assert isinstance(result, DataSource)
+    assert len(result.spec.input_specs) >= 2
+    assert "firm_AAPL" in result.spec.input_specs[0].field_path
 
 
 def test_news_adapter():
     """News adapter should handle pre-computed embeddings."""
     embeddings = torch.randn(100, 32)
-    spec, data = news_adapter(embeddings)
-    assert isinstance(spec, DatasetSpec)
-    assert len(spec.input_specs) == 1
-    assert "events.news_embedding" in spec.input_specs[0].field_path
+    result = news_adapter(embeddings)
+    assert isinstance(result, DataSource)
+    assert len(result.spec.input_specs) == 1
+    assert "events.news_embedding" in result.spec.input_specs[0].field_path

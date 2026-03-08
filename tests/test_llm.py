@@ -20,7 +20,6 @@ from general_unified_world_model.llm.projection_builder import (
     _build_schema_description,
     _parse_llm_response,
 )
-from general_unified_world_model.projection.subset import WorldProjection
 
 
 # ── Unit tests (no API calls) ──────────────────────────────────────────
@@ -70,8 +69,7 @@ class TestParseResponse:
 
 class TestLLMProjectionResult:
     def test_compile(self):
-        proj = WorldProjection(include=["financial", "regime"])
-        result = LLMProjectionResult(projection=proj, reasoning="test")
+        result = LLMProjectionResult(include=["financial", "regime"], reasoning="test")
         bound = result.compile(T=1, H=24, W=24, d_model=32)
         assert len(bound.field_names) > 0
 
@@ -155,9 +153,8 @@ class TestMockedAnthropicCalls:
         )
 
         assert isinstance(result, LLMProjectionResult)
-        assert isinstance(result.projection, WorldProjection)
-        assert "financial" in result.projection.include
-        assert "regime" in result.projection.include
+        assert "financial" in result.include
+        assert "regime" in result.include
         assert len(result.reasoning) > 0
 
     @patch("urllib.request.urlopen")
@@ -176,8 +173,8 @@ class TestMockedAnthropicCalls:
             api_key="sk-ant-test-key",
         )
 
-        assert "firm_ACME" in result.projection.entities
-        assert any("regime" in p for p in result.projection.include)
+        assert "firm_ACME" in result.entities
+        assert any("regime" in p for p in result.include)
 
     @patch("urllib.request.urlopen")
     def test_result_compiles(self, mock_urlopen):
@@ -217,8 +214,8 @@ class TestMockedOpenAICalls:
         )
 
         assert isinstance(result, LLMProjectionResult)
-        assert any("country" in p for p in result.projection.include)
-        assert "regime" in result.projection.include
+        assert any("country" in p for p in result.include)
+        assert "regime" in result.include
 
 
 class TestErrorHandling:
@@ -247,7 +244,7 @@ class TestErrorHandling:
 
         result = llm_project("test", provider="anthropic", api_key="key")
         # Should fall back to ["*"] when no valid domains found
-        assert result.projection.include == ["*"]
+        assert result.include == ["*"]
 
 
 # ── Live integration tests (requires API keys) ─────────────────────────
@@ -265,7 +262,7 @@ class TestLiveAnthropic:
         )
 
         # Flexible assertions: the LLM should pick reasonable domains
-        includes = result.projection.include
+        includes = result.include
         include_str = " ".join(includes)
 
         # Must include financial-related fields
@@ -304,7 +301,7 @@ class TestLiveOpenAI:
             provider="openai",
         )
 
-        includes = result.projection.include
+        includes = result.include
         include_str = " ".join(includes)
 
         # Should include country-level macro

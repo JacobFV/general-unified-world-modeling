@@ -29,7 +29,7 @@ import urllib.error
 from dataclasses import dataclass, field as dc_field
 from typing import Optional
 
-from general_unified_world_model.projection.subset import WorldProjection, project
+from general_unified_world_model.projection.subset import project
 from general_unified_world_model.schema.world import World
 
 
@@ -210,9 +210,11 @@ def _resolve_entities_from_response(parsed: dict) -> dict:
 class LLMProjectionResult:
     """Result from LLM-powered projection design.
 
-    Contains the WorldProjection plus the LLM's reasoning.
+    Contains the include/exclude/entities selected by the LLM plus reasoning.
     """
-    projection: WorldProjection
+    include: list = dc_field(default_factory=lambda: ["*"])
+    exclude: list = dc_field(default_factory=list)
+    entities: dict = dc_field(default_factory=dict)
     reasoning: str = ""
     raw_response: dict = dc_field(default_factory=dict)
 
@@ -224,7 +226,10 @@ class LLMProjectionResult:
         d_model: int = 64,
     ):
         """Compile this projection to a BoundSchema."""
-        return project(self.projection, T=T, H=H, W=W, d_model=d_model)
+        return project(
+            include=self.include, exclude=self.exclude,
+            entities=self.entities, T=T, H=H, W=W, d_model=d_model,
+        )
 
 
 def llm_project(
@@ -245,7 +250,7 @@ def llm_project(
         model: Model to use. Defaults to claude-sonnet-4-20250514 or gpt-4o-mini.
 
     Returns:
-        LLMProjectionResult with the designed WorldProjection.
+        LLMProjectionResult with include/exclude/entities and reasoning.
 
     Example:
         result = llm_project("Model Apple's business in the tech sector")
@@ -291,15 +296,10 @@ def llm_project(
     # Resolve entities
     entities = _resolve_entities_from_response(parsed)
 
-    # Build projection
-    projection = WorldProjection(
+    return LLMProjectionResult(
         include=validated_includes,
         exclude=parsed.get("exclude", []),
         entities=entities,
-    )
-
-    return LLMProjectionResult(
-        projection=projection,
         reasoning=parsed.get("reasoning", ""),
         raw_response=parsed,
     )

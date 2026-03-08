@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from general_unified_world_model.projection.subset import WorldProjection, project
+from general_unified_world_model.projection.subset import project
 from general_unified_world_model.training.backbone import build_world_model
 from general_unified_world_model.training.heterogeneous import FieldEncoder, FieldDecoder
 from general_unified_world_model.inference import WorldModel
@@ -12,8 +12,7 @@ from general_unified_world_model.inference import WorldModel
 @pytest.fixture
 def small_model():
     """A small world model for testing inference."""
-    proj = WorldProjection(include=["financial.yield_curves", "regime"])
-    bound = project(proj, T=1, H=24, W=24, d_model=32)
+    bound = project(include=["financial.yield_curves", "regime"], T=1, H=24, W=24, d_model=32)
     backbone = build_world_model(bound, n_layers=2, n_loops=1)
     encoder = FieldEncoder(bound)
     decoder = FieldDecoder(bound)
@@ -60,9 +59,9 @@ def test_save_and_load(small_model, tmp_path):
     small_model.save(checkpoint_path)
     assert checkpoint_path.exists()
 
-    proj = WorldProjection(include=["financial.yield_curves", "regime"])
     loaded = WorldModel.load(
-        checkpoint_path, proj,
+        checkpoint_path,
+        include=["financial.yield_curves", "regime"],
         T=1, H=24, W=24, d_model=32,
         n_layers=2, n_loops=1, device="cpu",
     )

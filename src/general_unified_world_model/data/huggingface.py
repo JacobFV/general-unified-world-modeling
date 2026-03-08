@@ -31,7 +31,7 @@ from typing import Optional
 import numpy as np
 import torch
 
-from general_unified_world_model.training.heterogeneous import DatasetSpec, InputSpec, OutputSpec, _infer_semantic_type
+from general_unified_world_model.training.heterogeneous import DatasetSpec, DataSource, InputSpec, OutputSpec, _infer_semantic_type
 from general_unified_world_model.data.adapters import (
     z_score, minmax, log_return, pct_change, rank_normalize,
 )
@@ -267,7 +267,7 @@ def hf_adapter(
     transform_overrides: dict[str, str] | None = None,
     weight: float = 1.0,
     trust_remote_code: bool = False,
-) -> tuple[DatasetSpec, dict[str, torch.Tensor]]:
+) -> DataSource:
     """Auto-map a HuggingFace dataset to world model fields.
 
     Loads a dataset from HuggingFace Hub, inspects column names and metadata,
@@ -420,7 +420,7 @@ def hf_adapter(
         f"from '{dataset_name}' (domains: {inferred_domains})"
     )
 
-    return spec, data_dict
+    return DataSource(spec=spec, data=data_dict)
 
 
 def hf_inspect(

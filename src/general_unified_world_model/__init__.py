@@ -20,7 +20,7 @@ __version__ = "0.0.3"
 from general_unified_world_model.schema.world import World
 
 # Projection
-from general_unified_world_model.projection.subset import WorldProjection, project
+from general_unified_world_model.projection.subset import project
 from general_unified_world_model.projection.temporal import TemporalTopology, TemporalEntity
 from general_unified_world_model.projection.transfer import TransferDistanceEstimator
 
@@ -29,6 +29,9 @@ from general_unified_world_model.training.heterogeneous import (
     HeterogeneousDataset,
     MaskedCanvasTrainer,
     DatasetSpec,
+    DataSource,
+    CoverageReport,
+    check_coverage,
     FieldEncoder,
     FieldDecoder,
     InputSpec,

@@ -29,45 +29,15 @@ See [Schema Reference](schema.md) for a full breakdown of all 19 layers and 857 
 
 ## Projection
 
-### `WorldProjection`
-
-Declares which parts of a schema to include. Uses a unified `entities` dict for dynamic entities (firms, individuals, countries, sectors, supply chain nodes).
-
-```python
-from general_unified_world_model import WorldProjection
-from general_unified_world_model.schema.business import Business
-from general_unified_world_model.schema.individual import Individual
-
-proj = WorldProjection(
-    include=["financial", "country_us.macro", "regime", "forecasts"],
-    exclude=[],
-    entities={
-        "firm_AAPL": Business(),
-        "firm_NVDA": Business(),
-        "person_ceo": Individual(),
-    },
-)
-```
-
-**Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `include` | `list[str]` | Dotted paths into the schema to include. `["*"]` = all. |
-| `exclude` | `list[str]` | Paths to exclude (applied after include) |
-| `entities` | `dict[str, Any]` | Dynamic entities: name -> dataclass instance |
-| `connectivity` | `ConnectivityPolicy \| None` | Override connectivity policy |
-| `temporal_start` | `dict[str, int]` | Entity temporal start indices |
-
 ### `project()`
 
-Compiles a schema projection into a `BoundSchema`. Accepts either a schema root directly or a `WorldProjection`.
+Compiles a schema projection into a `BoundSchema`. Selects which parts of a schema to include, adds dynamic entities, and compiles to a canvas layout.
 
 ```python
 from general_unified_world_model import World, project
 from general_unified_world_model.schema.business import Business
 
-# Clean API: schema root + include/exclude
+# Schema root + include/exclude
 bound = project(World(), include=["financial", "regime"], d_model=64)
 
 # With entities
@@ -78,19 +48,15 @@ bound = project(
     d_model=64,
 )
 
-# Default root (World())
+# Default root (World()) when omitted
 bound = project(include=["regime"], d_model=64)
-
-# Legacy: WorldProjection
-proj = WorldProjection(include=["financial"])
-bound = project(proj, T=1, d_model=64)
 ```
 
 **Parameters:**
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `proj_or_root` | `WorldProjection \| dataclass \| None` | Schema root or projection. None defaults to `World()`. |
+| `schema_root` | `dataclass \| None` | Schema root. None defaults to `World()`. |
 | `include` | `list[str] \| None` | Dotted paths to include. Default `["*"]`. |
 | `exclude` | `list[str] \| None` | Paths to exclude. |
 | `entities` | `dict[str, Any] \| None` | Dynamic entity dict. |
@@ -102,6 +68,63 @@ bound = project(proj, T=1, d_model=64)
 | `t_current` | `int` | Timestep boundary for output mask |
 
 **Returns:** `BoundSchema` with `.field_names`, `.layout`, `.topology`, `.fields`.
+
+---
+
+## Data Sources
+
+### `DataSource`
+
+Bundles a `DatasetSpec` (mapping declaration) with actual tensor data. This is the standard exchange type for data throughout the pipeline — adapters return it, trainers consume it.
+
+```python
+from general_unified_world_model import DataSource, DatasetSpec, InputSpec, OutputSpec
+
+source = DataSource(
+    spec=DatasetSpec(
+        name="my_data",
+        input_specs=[InputSpec(key="gdp", semantic_type="US GDP", field_path="country_us.macro.output.gdp_official")],
+        output_specs=[OutputSpec(key="gdp", semantic_type="US GDP", field_path="country_us.macro.output.gdp_official")],
+    ),
+    data={"gdp": torch.randn(100)},
+)
+```
+
+Or use an adapter:
+
+```python
+from general_unified_world_model.data.adapters import fred_adapter
+source = fred_adapter(start_date="2010-01-01")  # returns DataSource
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `spec` | `DatasetSpec` | The mapping declaration |
+| `data` | `dict[str, Any]` | Actual tensor values keyed by column name |
+| `name` | `str` | Shortcut for `spec.name` |
+| `field_paths` | `list[str]` | All schema field paths this source covers |
+
+### `check_coverage(data_sources, bound_schema)`
+
+Check how well a list of data sources covers a schema projection.
+
+```python
+from general_unified_world_model import check_coverage, project
+
+bound = project(include=["financial", "regime"], d_model=64)
+report = check_coverage([fred_source, yahoo_source], bound)
+print(report)  # Coverage: 42% (28/67 fields)
+```
+
+### `CoverageReport`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `covered` | `set[str]` | Fields that have data |
+| `missing` | `set[str]` | Fields with no data source |
+| `extra` | `set[str]` | Data source fields not in the projection |
+| `coverage_ratio` | `float` | `len(covered) / total` |
+| `is_complete` | `bool` | Whether all fields are covered |
 
 ---
 
@@ -181,11 +204,20 @@ Dynamic region management. New regions are zero-initialized.
 
 #### `WorldModel.ingest(data, spec)`
 
-Populate canvas from a data dict using a DatasetSpec.
+Populate canvas from a data dict or DataSource.
 
 ```python
-model.ingest({"gdp": 2.1, "cpi": 3.4}, spec=fred_spec)
+model.ingest(fred_source)  # DataSource
+model.ingest({"gdp": 2.1, "cpi": 3.4}, spec=fred_spec)  # dict + spec
 ```
+
+#### `WorldModel.add_data(source)`
+
+Register a DataSource for training and ingestion.
+
+#### `WorldModel.check_coverage()`
+
+Check how well registered data sources cover the model's fields. Returns a `CoverageReport`.
 
 #### `WorldModel.from_schema(schema_root, include, exclude, entities, ...)`
 
@@ -204,10 +236,12 @@ Convenience subclass of `WorldModel` with the built-in 857-field `World()` schem
 ```python
 from general_unified_world_model import GeneralUnifiedWorldModel
 from general_unified_world_model.schema.business import Business
+from general_unified_world_model.data.adapters import fred_adapter, yahoo_finance_adapter
 
 model = GeneralUnifiedWorldModel(
     include=["financial", "country_us.macro", "regime", "forecasts"],
     entities={"firm_AAPL": Business()},
+    data_sources=[fred_adapter(), yahoo_finance_adapter()],
     d_model=64,
 )
 
@@ -226,9 +260,9 @@ predictions = model.predict()
 | `H`, `W` | `int \| None` | Canvas size. None = auto-sized. |
 | `d_model` | `int` | Latent dimension. |
 | `device` | `str` | Device. |
+| `data_sources` | `list[DataSource] \| None` | Data sources for training/ingestion. |
 | `n_layers` | `int` | Backbone depth (default 6). |
 | `n_loops` | `int` | Looped attention iterations (default 3). |
-| `dataset_specs` | `list[DatasetSpec] \| None` | Pre-registered dataset specs. |
 
 #### `GeneralUnifiedWorldModel.project_subset(include, exclude, entities)`
 
@@ -236,7 +270,7 @@ Create a new `GeneralUnifiedWorldModel` from a subset of the current model's fie
 
 #### `GeneralUnifiedWorldModel.load(path, include, exclude, ...)`
 
-Load from checkpoint with simplified signature (no WorldProjection needed).
+Load from checkpoint with simplified signature.
 
 ---
 
@@ -404,7 +438,7 @@ Available renderers: `canvas_heatmap`, `topology_graph`, `financial_chart`, `geo
 
 ### `llm_project(description, provider="anthropic", api_key=None)`
 
-Use an LLM to design a `WorldProjection` from a natural language description.
+Use an LLM to design a world model projection from a natural language description.
 
 ```python
 from general_unified_world_model import llm_project

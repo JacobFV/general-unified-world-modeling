@@ -139,6 +139,95 @@ class DatasetSpec:
         return sorted(paths)
 
 
+# ── DataSource ────────────────────────────────────────────────────────────
+
+@dataclass
+class DataSource:
+    """A dataset bound to its data: the spec (mapping) + actual tensor values.
+
+    This is the standard exchange type for data throughout the pipeline.
+    Adapters return DataSource, trainers consume DataSource.
+
+    Usage::
+
+        source = fred_adapter(...)
+        source.spec    # the DatasetSpec
+        source.data    # the tensor dict
+    """
+    spec: DatasetSpec
+    data: dict[str, Any]
+
+    @property
+    def name(self) -> str:
+        return self.spec.name
+
+    @property
+    def field_paths(self) -> list[str]:
+        """All unique field paths this source covers."""
+        return self.spec.all_field_paths
+
+    def covers(self, bound_schema) -> "CoverageReport":
+        """Check how well this source covers a BoundSchema's fields."""
+        return check_coverage([self], bound_schema)
+
+
+@dataclass
+class CoverageReport:
+    """Report on how well data sources cover a schema projection."""
+    covered: set[str]
+    missing: set[str]
+    extra: set[str]
+    coverage_ratio: float
+    is_complete: bool
+
+    def __str__(self) -> str:
+        lines = [f"Coverage: {self.coverage_ratio:.0%} ({len(self.covered)}/{len(self.covered) + len(self.missing)} fields)"]
+        if self.missing:
+            lines.append(f"  Missing: {', '.join(sorted(self.missing)[:10])}")
+            if len(self.missing) > 10:
+                lines.append(f"    ... and {len(self.missing) - 10} more")
+        return "\n".join(lines)
+
+
+def check_coverage(
+    data_sources: list[DataSource],
+    bound_schema,
+) -> CoverageReport:
+    """Check how well data sources cover a BoundSchema's fields.
+
+    Args:
+        data_sources: List of DataSource objects.
+        bound_schema: BoundSchema from project() / compile_schema().
+
+    Returns:
+        CoverageReport with covered/missing/extra field sets.
+    """
+    sources = data_sources
+
+    # Gather all field paths declared by data sources
+    source_paths = set()
+    for ds in sources:
+        for ispec in ds.spec.input_specs:
+            source_paths.add(ispec.field_path)
+
+    schema_paths = set(bound_schema.field_names)
+
+    covered = source_paths & schema_paths
+    missing = schema_paths - source_paths
+    extra = source_paths - schema_paths
+
+    total = len(schema_paths)
+    ratio = len(covered) / total if total > 0 else 0.0
+
+    return CoverageReport(
+        covered=covered,
+        missing=missing,
+        extra=extra,
+        coverage_ratio=ratio,
+        is_complete=(len(missing) == 0),
+    )
+
+
 # ── Heterogeneous Dataset ────────────────────────────────────────────────
 
 class HeterogeneousDataset(Dataset):
@@ -156,18 +245,17 @@ class HeterogeneousDataset(Dataset):
     def __init__(
         self,
         bound_schema,
-        sources: list[tuple[DatasetSpec, Any]],
+        sources: list[DataSource],
         seq_len: int = 1,
     ):
         """
         Args:
             bound_schema: BoundSchema from compile_schema / project()
-            sources: List of (DatasetSpec, raw_data) pairs where raw_data
-                is either a dict of tensors or a callable that returns one.
+            sources: List of DataSource objects.
             seq_len: Number of timesteps per training sample.
         """
         self.bound = bound_schema
-        self.sources = sources
+        self.sources = list(sources)
         self.seq_len = seq_len
         self.d_model = bound_schema.layout.d_model
         self.n_positions = bound_schema.layout.num_positions
@@ -186,9 +274,9 @@ class HeterogeneousDataset(Dataset):
 
         # Precompute field indices for each source
         self._source_indices = []
-        for spec, _ in sources:
+        for ds in sources:
             field_indices = {}
-            for ispec in spec.input_specs:
+            for ispec in ds.spec.input_specs:
                 target = ispec.field_path
                 # Normalize: try compiled name if dot-path doesn't match directly
                 if target in self._dot_to_compiled:
@@ -223,12 +311,14 @@ class HeterogeneousDataset(Dataset):
 
         # Build sample index: (source_idx, time_offset) pairs
         self._samples = []
-        for src_idx, (spec, raw_data) in enumerate(sources):
+        for src_idx, ds in enumerate(self.sources):
+            raw_data = ds.data
             if callable(raw_data):
                 raw_data = raw_data()
+                self.sources[src_idx] = DataSource(spec=ds.spec, data=raw_data)
             # Determine dataset length from first input spec's data
             n_rows = 0
-            for ispec in spec.input_specs:
+            for ispec in ds.spec.input_specs:
                 key = ispec.key
                 if isinstance(raw_data, dict) and key in raw_data:
                     tensor = raw_data[key]
@@ -236,9 +326,6 @@ class HeterogeneousDataset(Dataset):
                         n_rows = max(n_rows, tensor.shape[0])
                     break
 
-            # Store the raw data
-            if isinstance(raw_data, dict):
-                self.sources[src_idx] = (spec, raw_data)
             for t in range(max(0, n_rows - seq_len + 1)):
                 self._samples.append((src_idx, t))
 
@@ -267,7 +354,8 @@ class HeterogeneousDataset(Dataset):
 
     def __getitem__(self, idx):
         src_idx, t_offset = self._samples[idx]
-        spec, raw_data = self.sources[src_idx]
+        ds = self.sources[src_idx]
+        raw_data = ds.data
         field_info = self._source_indices[src_idx]
 
         # Create empty canvas-shaped tensors
@@ -543,7 +631,7 @@ class MaskedCanvasTrainer:
 
 def build_mixed_dataloader(
     bound_schema,
-    sources: list[tuple[DatasetSpec, Any]],
+    sources: list[DataSource],
     batch_size: int = 32,
     num_workers: int = 0,
     seq_len: int = 1,
@@ -556,7 +644,7 @@ def build_mixed_dataloader(
 
     Args:
         bound_schema: BoundSchema from compile_schema / project()
-        sources: List of (DatasetSpec, data) pairs.
+        sources: List of DataSource objects.
         batch_size: Samples per batch.
         num_workers: DataLoader workers.
         seq_len: Timesteps per sample.

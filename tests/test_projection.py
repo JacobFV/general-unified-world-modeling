@@ -4,7 +4,7 @@ import pytest
 import torch
 from canvas_engineering import ConnectivityPolicy
 
-from general_unified_world_model.projection.subset import WorldProjection, project
+from general_unified_world_model.projection.subset import project
 from general_unified_world_model.projection.temporal import TemporalTopology, TemporalEntity
 from general_unified_world_model.schema.business import Business
 from general_unified_world_model.schema.individual import Individual
@@ -13,33 +13,29 @@ from general_unified_world_model.schema.country import Country
 
 def test_full_projection():
     """include=["*"] should include all fields."""
-    proj = WorldProjection(include=["*"])
-    bound = project(proj, T=1, H=128, W=128, d_model=64)
+    bound = project(include=["*"], T=1, H=128, W=128, d_model=64)
     assert len(bound.field_names) > 800
 
 
 def test_partial_projection():
     """Partial include should produce smaller canvas."""
-    full = WorldProjection(include=["*"])
-    partial = WorldProjection(include=["financial", "regime"])
-
-    full_bound = project(full, T=1, H=128, W=128, d_model=64)
-    partial_bound = project(partial, T=1, H=32, W=32, d_model=64)
+    full_bound = project(include=["*"], T=1, H=128, W=128, d_model=64)
+    partial_bound = project(include=["financial", "regime"], T=1, H=32, W=32, d_model=64)
 
     assert len(partial_bound.field_names) < len(full_bound.field_names)
 
 
 def test_dynamic_firms():
     """Adding firms should create new Business fields."""
-    proj = WorldProjection(
+    bound = project(
         include=["regime"],
         entities={
             "firm_AAPL": Business(),
             "firm_NVDA": Business(),
             "firm_TSMC": Business(),
         },
+        T=1, H=64, W=64, d_model=64,
     )
-    bound = project(proj, T=1, H=64, W=64, d_model=64)
 
     # Should have fields for each firm
     firm_fields = [f for f in bound.field_names if "firm_AAPL" in f]
@@ -51,14 +47,14 @@ def test_dynamic_firms():
 
 def test_dynamic_individuals():
     """Adding individuals should create new Individual fields."""
-    proj = WorldProjection(
+    bound = project(
         include=["regime"],
         entities={
             "person_ceo": Individual(),
             "person_cfo": Individual(),
         },
+        T=1, H=48, W=48, d_model=64,
     )
-    bound = project(proj, T=1, H=48, W=48, d_model=64)
 
     person_fields = [f for f in bound.field_names if "person_ceo" in f]
     assert len(person_fields) > 0, "CEO fields not found"
@@ -66,14 +62,14 @@ def test_dynamic_individuals():
 
 def test_dynamic_countries():
     """Adding countries should create new Country fields."""
-    proj = WorldProjection(
+    bound = project(
         include=["regime"],
         entities={
             "country_jp": Country(),
             "country_kr": Country(),
         },
+        T=1, H=64, W=64, d_model=64,
     )
-    bound = project(proj, T=1, H=64, W=64, d_model=64)
 
     jp_fields = [f for f in bound.field_names if "country_jp" in f]
     assert len(jp_fields) > 0, "Japan fields not found"
@@ -81,11 +77,11 @@ def test_dynamic_countries():
 
 def test_connectivity_policy():
     """Custom connectivity should propagate to compiled schema."""
-    proj = WorldProjection(
+    bound = project(
         include=["financial.yield_curves", "regime"],
         connectivity=ConnectivityPolicy(intra="isolated"),
+        T=1, H=24, W=24, d_model=64,
     )
-    bound = project(proj, T=1, H=24, W=24, d_model=64)
     assert len(bound.topology.connections) > 0
 
 
@@ -118,8 +114,7 @@ def test_temporal_topology():
 
 def test_projection_forward_pass():
     """A projected schema should support a full forward pass."""
-    proj = WorldProjection(include=["financial.yield_curves", "regime"])
-    bound = project(proj, T=1, H=24, W=24, d_model=64)
+    bound = project(include=["financial.yield_curves", "regime"], T=1, H=24, W=24, d_model=64)
 
     from general_unified_world_model.training.backbone import build_world_model
 

@@ -45,11 +45,11 @@ import torch.nn as nn
 
 from canvas_engineering import ConnectivityPolicy, compile_schema
 
-from general_unified_world_model.projection.subset import WorldProjection, project
+from general_unified_world_model.projection.subset import project
 from general_unified_world_model.training.backbone import build_world_model, WorldModelBackbone
 from general_unified_world_model.training.heterogeneous import (
     FieldEncoder, FieldDecoder, MaskedCanvasTrainer,
-    DatasetSpec, HeterogeneousDataset, build_mixed_dataloader,
+    DatasetSpec, DataSource, HeterogeneousDataset, build_mixed_dataloader,
 )
 
 
@@ -213,7 +213,7 @@ class CurriculumTrainer:
     def __init__(
         self,
         config: CurriculumConfig,
-        data_sources: dict[str, tuple[DatasetSpec, dict]],
+        data_sources: dict[str, DataSource],
         domains: list[DomainSpec] | None = None,
         couplings: list[CouplingSpec] | None = None,
     ):
@@ -243,9 +243,9 @@ class CurriculumTrainer:
             print(f"\n--- Training domain: {domain.name} ---")
 
             # Build projection for this domain
-            proj = WorldProjection(include=domain.include)
             bound = project(
-                proj, T=1, H=domain.H, W=domain.W, d_model=domain.d_model
+                include=domain.include,
+                T=1, H=domain.H, W=domain.W, d_model=domain.d_model,
             )
 
             print(f"  Fields: {len(bound.field_names)}, "
@@ -346,8 +346,10 @@ class CurriculumTrainer:
                     all_includes.extend(domain.include)
 
             # Build coupled projection
-            proj = WorldProjection(include=list(set(all_includes)))
-            bound = project(proj, T=1, H=coupling.H, W=coupling.W, d_model=64)
+            bound = project(
+                include=list(set(all_includes)),
+                T=1, H=coupling.H, W=coupling.W, d_model=64,
+            )
 
             print(f"  Fields: {len(bound.field_names)}, "
                   f"Positions: {bound.layout.num_positions}")
@@ -422,8 +424,7 @@ class CurriculumTrainer:
         print(f"{'='*60}")
 
         # Full world projection
-        proj = WorldProjection(include=["*"])
-        bound = project(proj, T=1, H=128, W=128, d_model=64)
+        bound = project(include=["*"], T=1, H=128, W=128, d_model=64)
 
         print(f"  Fields: {len(bound.field_names)}, "
               f"Positions: {bound.layout.num_positions}, "
