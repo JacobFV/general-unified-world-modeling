@@ -1,4 +1,4 @@
-"""Curriculum training for the Grand Unified World Model.
+"""Curriculum training for the General Unified World Model.
 
 The training proceeds in phases:
 

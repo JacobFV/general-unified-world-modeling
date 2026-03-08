@@ -1,4 +1,4 @@
-"""Diffusion training for the Grand Unified World Model.
+"""Diffusion training for the General Unified World Model.
 
 The world model uses a denoising diffusion objective on the canvas:
 - Input: partially observed canvas (some fields have real data)

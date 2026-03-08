@@ -1,4 +1,4 @@
-"""Schema declarations for the Grand Unified World Model.
+"""Schema declarations for the General Unified World Model.
 
 The full ontology lives in submodules organized by domain layer.
 Import `World` for the top-level composition.

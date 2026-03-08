@@ -1,4 +1,4 @@
-# grand-unified-world-model
+# general-unified-world-model
 
 ### A typed causal ontology of civilization, built on [canvas-engineering](https://github.com/JacobFV/canvas-engineering) structured latent spaces.
 
@@ -18,14 +18,14 @@ Traditional approaches either:
 - **(a)** restrict to the intersection — throw out data missing any field
 - **(b)** impute missing values — introduce noise
 
-**Grand Unified World Model** takes option **(c)**: mask missing fields in the loss, train on what you have. Each dataset declares which fields it populates. The model learns the joint distribution across all modalities, even though no single dataset contains everything.
+**General Unified World Model** takes option **(c)**: mask missing fields in the loss, train on what you have. Each dataset declares which fields it populates. The model learns the joint distribution across all modalities, even though no single dataset contains everything.
 
 The key enabler is **canvas-engineering** — a type system for multimodal latent computation. Each field in the world model occupies specific positions on a 3D `(T, H, W)` canvas grid, with declared temporal frequency, loss weight, and connectivity. The topology is the compute graph.
 
 ## Quick start
 
 ```bash
-pip install grand-unified-world-model
+pip install general-unified-world-model
 ```
 
 ### Compile the full world model
@@ -299,16 +299,16 @@ credit_stress = predictions["forecasts.financial.credit_stress_3m"]
 
 ```bash
 # Core
-pip install grand-unified-world-model
+pip install general-unified-world-model
 
 # With real data adapters
-pip install grand-unified-world-model[data]
+pip install general-unified-world-model[data]
 
 # With training infrastructure
-pip install grand-unified-world-model[train]
+pip install general-unified-world-model[train]
 
 # Everything
-pip install grand-unified-world-model[all]
+pip install general-unified-world-model[all]
 ```
 
 Requires Python 3.10+ and PyTorch 2.0+.

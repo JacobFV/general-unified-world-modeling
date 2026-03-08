@@ -1,4 +1,4 @@
-"""Grand Unified World Model — structured latent space for civilization-scale modeling.
+"""General Unified World Model — structured latent space for civilization-scale modeling.
 
 Built on canvas-engineering: prompt engineering for latent space.
 

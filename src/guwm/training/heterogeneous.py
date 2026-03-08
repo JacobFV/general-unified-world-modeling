@@ -1,4 +1,4 @@
-"""Heterogeneous dataset training for the Grand Unified World Model.
+"""Heterogeneous dataset training for the General Unified World Model.
 
 The key insight: most datasets only cover a fraction of the world model's
 fields. A GDP dataset doesn't have equity prices. A market dataset doesn't

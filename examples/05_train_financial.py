@@ -6,7 +6,7 @@ This example shows the full training pipeline:
 3. Build heterogeneous dataset with masked loss
 4. Train with curriculum
 
-Requires: pip install grand-unified-world-model[data]
+Requires: pip install general-unified-world-model[data]
 Set FRED_API_KEY environment variable.
 
 Run: python examples/05_train_financial.py

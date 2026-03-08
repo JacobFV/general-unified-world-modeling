@@ -160,7 +160,7 @@ def fred_adapter(
     try:
         from fredapi import Fred
     except ImportError:
-        raise ImportError("Install fredapi: pip install grand-unified-world-model[data]")
+        raise ImportError("Install fredapi: pip install general-unified-world-model[data]")
 
     import os
     api_key = api_key or os.environ.get("FRED_API_KEY")
@@ -269,7 +269,7 @@ def yahoo_finance_adapter(
     try:
         import yfinance as yf
     except ImportError:
-        raise ImportError("Install yfinance: pip install grand-unified-world-model[data]")
+        raise ImportError("Install yfinance: pip install general-unified-world-model[data]")
 
     # Collect all tickers and their mappings
     all_fields = {}

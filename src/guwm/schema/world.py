@@ -1,6 +1,6 @@
 """Layer 19: The World (top-level composition).
 
-Grand Unified World Model. Composes all layers into a single typed
+General Unified World Model. Composes all layers into a single typed
 causal ontology that can be compiled to a canvas schema.
 
 Dense always-on:  physical, resources, financial, narratives,
@@ -43,7 +43,7 @@ from guwm.schema.forecast import ForecastBundle
 
 @dataclass
 class World:
-    """Grand Unified World Model.
+    """General Unified World Model.
 
     Dense always-on:  physical, resources, financial, narratives,
                       technology, regime, events, trust
