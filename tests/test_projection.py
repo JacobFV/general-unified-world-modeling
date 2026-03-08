@@ -72,10 +72,7 @@ def test_connectivity_policy():
     """Custom connectivity should propagate to compiled schema."""
     proj = WorldProjection(
         include=["financial.yield_curves", "regime"],
-        connectivity=ConnectivityPolicy(
-            intra="isolated",
-            parent_child="broadcast",
-        ),
+        connectivity=ConnectivityPolicy(intra="isolated"),
     )
     bound = project(proj, T=1, H=24, W=24, d_model=64)
     assert len(bound.topology.connections) > 0

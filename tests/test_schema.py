@@ -88,7 +88,7 @@ def test_compile_full_world():
     world = World()
     bound = compile_schema(
         world, T=1, H=128, W=128, d_model=64,
-        connectivity=ConnectivityPolicy(intra="dense", parent_child="hub_spoke"),
+        connectivity=ConnectivityPolicy(intra="dense"),
     )
     assert len(bound.field_names) > 800
     assert bound.layout.num_positions > 0

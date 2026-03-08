@@ -378,7 +378,6 @@ def project(
 
     conn = connectivity or proj.connectivity or ConnectivityPolicy(
         intra="dense",
-        parent_child="bottleneck",
         array_element="ring",
         temporal="dense",
     )
