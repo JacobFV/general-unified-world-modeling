@@ -28,9 +28,7 @@ Traditional approaches either:
 - **(a)** restrict to the intersection — throw out data missing any field
 - **(b)** impute missing values — introduce noise
 
-**General Unified World Model** uses two complementary tools:
-- **(c1) Coarse-graining** — at projection time, excluded sub-types collapse to 1×1 positions that keep their original field name. A hedge fund modeling only `financial.yield_curves` still has a `financial.credit` position — just compressed to one vector instead of ten. Because names are stable, encoders and decoders transfer across projections without re-learning.
-- **(c2) Masking** — at training time, zero out the loss for fields that lack data in the current dataset. The model still predicts everywhere, but only backpropagates through fields with ground truth. A GDP-only dataset trains the macro fields and the shared regime latent without needing equity prices.
+**General Unified World Model** uses **coarse-graining**: you declare exactly which nodes you want to model. Non-included sub-types simply don't exist on the canvas — no positions, no attention, no loss. Each nested type that IS included automatically gets a coarse-grained field (a compressed representation at its path) that bottlenecks cross-level attention. A hedge fund including only `financial.yield_curves` and `regime` gets yield curve fields fully expanded and a coarse-grained field for the regime — with no credit, FX, or other sub-types consuming canvas space. The topology handles connectivity: fields only attend to what's actually on the canvas.
 
 The key enabler is **canvas-engineering** — a type system for multimodal latent computation. Each field in the world model occupies specific positions on a 3D `(T, H, W)` canvas grid, with declared temporal frequency, loss weight, and connectivity. The topology is the compute graph.
 
@@ -337,18 +335,15 @@ The architecture preserves the real world's distributed interaction structure. D
 
 ## Heterogeneous data training
 
-The key innovation: **masked loss on structured canvas**.
+Each dataset maps its columns to whatever fields exist on the canvas. Loss is computed only on positions that have ground truth — fields without data in the current batch get no gradient. The topology handles what connects to what.
 
 ```
-Dataset A (FRED):     GDP ✓  CPI ✓  VIX ✗  Yields ✗
-Dataset B (Yahoo):    GDP ✗  CPI ✗  VIX ✓  Yields ✓
-Dataset C (News):     GDP ✗  CPI ✗  VIX ✗  Yields ✗  News ✓
-
-Canvas loss:  L = Σ (prediction - target)² × presence × loss_weight
-                      ↑ model predicts all    ↑ only active  ↑ from schema
+Dataset A (FRED):     GDP ✓  CPI ✓  (only macro fields on canvas)
+Dataset B (Yahoo):    VIX ✓  Yields ✓  (only financial fields on canvas)
+Dataset C (News):     Embeddings ✓  (only narrative fields on canvas)
 ```
 
-Both A and B train the **shared regime latent**, even though their field coverage doesn't overlap. The regime latent learns to compress the joint distribution from partial observations.
+Different projections can share backbone weights because the backbone operates on semantically-conditioned positions. A GDP-trained backbone transfers to a yields projection because the transformer's attention weights are parameterized by semantics, not positions.
 
 ## Data adapters
 

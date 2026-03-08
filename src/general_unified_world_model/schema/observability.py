@@ -1,6 +1,6 @@
 """Observability bundles — epistemic wrappers for measurements.
 
-Every measurement comes through fog. These are reusable companion
+Every measurement comes with uncertainty. These are reusable companion
 types that wrap any value with epistemic metadata.
 """
 

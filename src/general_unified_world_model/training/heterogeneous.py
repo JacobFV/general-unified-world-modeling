@@ -6,26 +6,16 @@ have demographics. Traditional approaches either:
   (a) throw out data that's missing fields — wasteful
   (b) impute missing fields — introduces noise
 
-Canvas engineering gives us two complementary tools:
-  (c1) coarse-graining — at projection time, excluded sub-types collapse
-       to 1×1 positions that still participate in attention, keeping their
-       original field names so encoders/decoders transfer across projections
-  (c2) masking — at training time, zero out loss for fields that lack data
-       in the current dataset (the model still predicts them, just no gradient)
+Canvas engineering solves this via coarse-graining: you declare exactly
+which nodes you want to model. Non-included sub-types simply don't exist
+on the canvas — no positions, no attention, no loss. Their parent's
+coarse-grained field still participates in attention, learning compressed
+dynamics from whatever data IS available.
 
-Each dataset declares which fields it populates. The trainer:
-  1. Places available data into the canvas at the correct positions
-  2. Generates a per-position mask (1 where data exists, 0 where missing)
-  3. Multiplies loss by (mask * loss_weight_mask) — only backprop through
-     fields that have ground truth
-  4. The diffusion process still generates predictions for masked fields —
-     they just don't contribute to the loss
-
-This means:
-  - A GDP-only dataset trains the macro fields and the regime latent
-  - A market dataset trains financial fields and the regime latent
-  - Both datasets train the *shared* regime latent, which learns to compress
-    the joint distribution even though no single dataset has everything
+Each dataset maps its columns to fields on the canvas. The trainer places
+data at the correct positions and computes loss only on positions that
+have ground truth. Fields without data in the current batch get no
+gradient — the topology handles what connects to what.
 
 Multi-frequency handling:
   - Fields with period > 1 are held constant across their period
