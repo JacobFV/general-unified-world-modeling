@@ -49,6 +49,9 @@ train = [
     "safetensors>=0.4",
     "bitsandbytes>=0.41",
 ]
+env = [
+    "gymnasium>=0.29",
+]
 viz = [
     "matplotlib>=3.7",
 ]
@@ -71,7 +74,7 @@ dev = [
     "mkdocs-material>=9.0",
 ]
 all = [
-    "general-unified-world-model[data,cogvideox,train,dev,viz,diagrams]",
+    "general-unified-world-model[data,cogvideox,train,dev,viz,diagrams,env]",
 ]
 
 [project.urls]

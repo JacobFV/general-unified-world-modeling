@@ -188,17 +188,17 @@ class WorldModel:
             value = torch.tensor(value, dtype=torch.float32)
         self._observations[field_path] = value
 
-        # Also write into the canvas tensor
+        # Also write into the canvas tensor (encode per-position scalars)
         try:
             bf = self.bound[field_path]
             indices = bf.indices()
-            value_dev = value.to(self.device).float()
-            if value_dev.dim() == 1:
-                value_dev = value_dev.unsqueeze(0).unsqueeze(0)
-            encoded = self.encoder(field_path, value_dev)
+            value_flat = value.to(self.device).float().flatten()
             for i, idx in enumerate(indices):
-                if idx < self.n_positions and i < encoded.shape[1]:
-                    self._canvas[0, idx] = encoded[0, i]
+                if idx < self.n_positions:
+                    scalar_val = value_flat[min(i, len(value_flat) - 1)]
+                    scalar_t = scalar_val.view(1, 1, 1)
+                    encoded = self.encoder(field_path, scalar_t)
+                    self._canvas[0, idx] = encoded[0, 0]
         except (KeyError, AttributeError):
             pass
 
@@ -216,14 +216,13 @@ class WorldModel:
             try:
                 bf = self.bound[field_path]
                 indices = bf.indices()
-                value_dev = value.to(self.device).float()
-                if value_dev.dim() == 1:
-                    value_dev = value_dev.unsqueeze(0).unsqueeze(0)
-                encoded = self.encoder(field_path, value_dev)
+                value_flat = value.to(self.device).float().flatten()
                 for i, idx in enumerate(indices):
                     if idx < self.n_positions:
-                        if i < encoded.shape[1]:
-                            x_cond[0, idx] = encoded[0, i]
+                        scalar_val = value_flat[min(i, len(value_flat) - 1)]
+                        scalar_t = scalar_val.view(1, 1, 1)
+                        encoded = self.encoder(field_path, scalar_t)
+                        x_cond[0, idx] = encoded[0, 0]
                         cond_mask[0, idx] = 1.0
             except (KeyError, AttributeError):
                 continue
@@ -479,6 +478,180 @@ class WorldModel:
         """Check how well registered data sources cover this model's fields."""
         return check_coverage(self._data_sources, self.bound)
 
+    # ── Fine-tuning ──────────────────────────────────────────────────
+
+    def finetune(
+        self,
+        datasets: list[DataSource],
+        n_steps: int = 1000,
+        lr: float = 1e-5,
+        freeze_backbone: bool = False,
+        batch_size: int = 16,
+        log_every: int = 100,
+    ) -> dict[str, Any]:
+        """Fine-tune this world model on private datasets.
+
+        Calibrates the model to your data distribution while retaining
+        the general world dynamics learned during pre-training.  The shared
+        backbone (cross-domain associations) receives gradient from your
+        data, letting the model extrapolate private patterns to the full
+        world model.
+
+        Typical workflow::
+
+            # 1. Load a general pre-trained model
+            model = GeneralUnifiedWorldModel.load("general.pt", ...)
+
+            # 2. Fine-tune on your private data
+            model.finetune([my_hospital_ehr, my_claims_data])
+
+            # 3. Predict — now calibrated to your patients
+            model.observe("health.blood_pressure", 140.0)
+            predictions = model.predict()
+
+        Args:
+            datasets: DataSource objects with your private data.
+            n_steps: Number of fine-tuning steps.
+            lr: Learning rate (lower than pre-training, e.g. 1e-5).
+            freeze_backbone: If True, only fine-tune encoder/decoder heads.
+                Faster, less prone to catastrophic forgetting.  Good when
+                you have little data.  If False (default), the backbone
+                also adapts — better with substantial private data.
+            batch_size: Training batch size.
+            log_every: Print loss every N steps.
+
+        Returns:
+            Dict with ``losses`` (per-step list) and ``final_loss``.
+        """
+        import torch.nn.functional as F
+        from general_unified_world_model.training.heterogeneous import (
+            build_mixed_dataloader, MaskedCanvasTrainer,
+        )
+
+        self.backbone.train()
+        self.encoder.train()
+        self.decoder.train()
+
+        if freeze_backbone:
+            for p in self.backbone.parameters():
+                p.requires_grad = False
+
+        trainable = [
+            p for p in self.backbone.parameters() if p.requires_grad
+        ] + [
+            p for p in self.encoder.parameters() if p.requires_grad
+        ] + [
+            p for p in self.decoder.parameters() if p.requires_grad
+        ]
+
+        if not trainable:
+            self.backbone.eval()
+            self.encoder.eval()
+            self.decoder.eval()
+            return {"losses": [], "final_loss": 0.0}
+
+        optimizer = torch.optim.AdamW(trainable, lr=lr, weight_decay=0.01)
+
+        dataloader = build_mixed_dataloader(
+            self.bound, datasets, batch_size=batch_size,
+        )
+
+        # Pre-compute field → index mapping for the encode/decode loop
+        field_index_map: list[tuple[str, list[int]]] = []
+        for fname in self.bound.field_names:
+            try:
+                bf = self.bound[fname]
+                indices = [i for i in bf.indices() if i < self.n_positions]
+                if indices:
+                    field_index_map.append((fname, indices))
+            except (KeyError, AttributeError):
+                continue
+
+        # Build attention mask once
+        attn_mask = None
+        if self.bound.topology is not None:
+            attn_mask = self.bound.topology.to_additive_mask(
+                self.bound.layout, device=self.device,
+            )
+
+        losses: list[float] = []
+        step = 0
+
+        for _epoch in range(100_000):
+            for batch in dataloader:
+                canvas_data = batch["canvas_data"].to(self.device)
+                presence_mask = batch["presence_mask"].to(self.device)
+                B, N, _D = canvas_data.shape
+
+                # === Encode: raw channel-0 values → d_model via per-field encoder ===
+                encoded = torch.zeros(B, N, self.d_model, device=self.device)
+                for fname, indices in field_index_map:
+                    for idx in indices:
+                        raw = canvas_data[:, idx : idx + 1, :1]     # (B, 1, 1)
+                        enc = self.encoder(fname, raw)              # (B, 1, d)
+                        encoded[:, idx] = enc[:, 0]
+
+                # === Backbone ===
+                if attn_mask is not None:
+                    canvas_out = self.backbone(encoded, mask=attn_mask)
+                else:
+                    canvas_out = self.backbone(encoded)
+
+                # === Decode + loss: per-field decode back to raw, MSE vs target ===
+                loss_sum = torch.tensor(0.0, device=self.device)
+                n_active = 0
+                for fname, indices in field_index_map:
+                    for idx in indices:
+                        mask_col = presence_mask[:, idx]        # (B,)
+                        active = mask_col.sum()
+                        if active == 0:
+                            continue
+                        latent = canvas_out[:, idx : idx + 1]   # (B, 1, d)
+                        pred = self.decoder(fname, latent)      # (B, 1, 1)
+                        target = canvas_data[:, idx : idx + 1, :1]
+                        pos_loss = F.mse_loss(
+                            pred.squeeze(-1), target.squeeze(-1),
+                            reduction="none",
+                        )                                       # (B, 1)
+                        loss_sum = loss_sum + (pos_loss[:, 0] * mask_col).sum()
+                        n_active += int(active.item())
+
+                if n_active > 0:
+                    loss = loss_sum / n_active
+                else:
+                    loss = loss_sum * 0.0
+
+                optimizer.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(trainable, max_norm=1.0)
+                optimizer.step()
+
+                step += 1
+                losses.append(loss.item())
+
+                if step % log_every == 0:
+                    recent = losses[-log_every:]
+                    avg = sum(recent) / len(recent)
+                    print(f"  Finetune step {step}/{n_steps}: "
+                          f"loss={avg:.4f}, "
+                          f"coverage={n_active / max(1, B * N):.1%}")
+
+                if step >= n_steps:
+                    break
+            if step >= n_steps:
+                break
+
+        self.backbone.eval()
+        self.encoder.eval()
+        self.decoder.eval()
+
+        if freeze_backbone:
+            for p in self.backbone.parameters():
+                p.requires_grad = True
+
+        final_loss = losses[-1] if losses else 0.0
+        return {"losses": losses, "final_loss": final_loss}
+
     # ── Projection ────────────────────────────────────────────────────
 
     def project_subset(
@@ -502,6 +675,94 @@ class WorldModel:
         raise NotImplementedError(
             "project_subset() requires the original schema root. "
             "Use GeneralUnifiedWorldModel or construct a new BoundSchema manually."
+        )
+
+    # ── Environment extraction ────────────────────────────────────────
+
+    def to_openenv(
+        self,
+        obs_fields: list[str],
+        act_fields: list[str],
+        reward_fn,
+        *,
+        terminated_fn=None,
+        max_steps: int = 200,
+        n_denoise_steps: int = 10,
+        act_low: float = -1.0,
+        act_high: float = 1.0,
+        initial_obs_fn=None,
+        render_mode: str | None = None,
+    ) -> "WorldModelEnv":
+        """Extract a Gymnasium environment from this world model.
+
+        The world model acts as the dynamics simulator. Different choices
+        of obs_fields and act_fields carve out different agent perspectives
+        from the same learned dynamics.
+
+        Example: a corporate world model can yield both an employee
+        navigation env and a CEO strategy env, each seeing and controlling
+        different fields but sharing the same underlying dynamics.
+
+        Args:
+            obs_fields: Field paths the agent can observe.
+            act_fields: Field paths the agent can act on.
+            reward_fn: (obs_dict, action, info) -> float.
+            terminated_fn: Optional (obs_dict, step, info) -> bool.
+            max_steps: Episode length limit.
+            n_denoise_steps: Diffusion steps per predict (lower = faster).
+            act_low: Action space lower bound.
+            act_high: Action space upper bound.
+            initial_obs_fn: Callable returning initial observation dict.
+            render_mode: Gymnasium render mode.
+
+        Returns:
+            WorldModelEnv backed by this model's dynamics.
+        """
+        from general_unified_world_model.env import WorldModelEnv
+        return WorldModelEnv(
+            world_model=self,
+            obs_fields=obs_fields,
+            act_fields=act_fields,
+            reward_fn=reward_fn,
+            terminated_fn=terminated_fn,
+            max_steps=max_steps,
+            n_denoise_steps=n_denoise_steps,
+            act_low=act_low,
+            act_high=act_high,
+            initial_obs_fn=initial_obs_fn,
+            render_mode=render_mode,
+        )
+
+    def to_multi_openenv(
+        self,
+        agents: dict[str, Any],
+        *,
+        max_steps: int = 200,
+        n_denoise_steps: int = 10,
+        initial_obs_fn=None,
+    ) -> "MultiAgentWorldModelEnv":
+        """Extract a multi-agent environment from this world model.
+
+        Multiple agents share the same dynamics model but observe and
+        act on different fields. After all agents act, a single predict()
+        call advances the shared world state.
+
+        Args:
+            agents: Dict of agent_name -> AgentSpec.
+            max_steps: Episode length limit.
+            n_denoise_steps: Diffusion steps per predict.
+            initial_obs_fn: Callable returning initial observation dict.
+
+        Returns:
+            MultiAgentWorldModelEnv backed by this model's dynamics.
+        """
+        from general_unified_world_model.env import MultiAgentWorldModelEnv
+        return MultiAgentWorldModelEnv(
+            world_model=self,
+            agents=agents,
+            max_steps=max_steps,
+            n_denoise_steps=n_denoise_steps,
+            initial_obs_fn=initial_obs_fn,
         )
 
     # ── Persistence ───────────────────────────────────────────────────

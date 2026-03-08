@@ -54,6 +54,9 @@ from general_unified_world_model.training.dag_curriculum import (
 # Inference
 from general_unified_world_model.inference import WorldModel, GeneralUnifiedWorldModel
 
+# Environment extraction (lazy — only loaded when accessed, needs gymnasium)
+from general_unified_world_model.env import WorldModelEnv, MultiAgentWorldModelEnv, AgentSpec
+
 # Rendering (lazy — only loaded when accessed, needs matplotlib)
 def render(bound_schema, renderer, **kwargs):
     from general_unified_world_model.rendering.base import render as _render
@@ -63,3 +66,13 @@ def render(bound_schema, renderer, **kwargs):
 def llm_project(description, **kwargs):
     from general_unified_world_model.llm.projection_builder import llm_project as _llm_project
     return _llm_project(description, **kwargs)
+
+
+def llm_build(description, **kwargs):
+    """Design + optionally train a world model from natural language + datasets.
+
+    See ``general_unified_world_model.llm.projection_builder.llm_build``
+    for the full signature and docs.
+    """
+    from general_unified_world_model.llm.projection_builder import llm_build as _llm_build
+    return _llm_build(description, **kwargs)
