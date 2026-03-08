@@ -1,12 +1,13 @@
 """Generate all README images.
 
 Produces high-quality visualizations for:
-1. Canvas heatmaps (full world + macro projection)
+1. Canvas heatmaps (full world + macro projection + hedge fund)
 2. Topology graphs (macro model + hedge fund model)
-3. Financial charts (demo data)
-4. Geopolitical map
-5. Regime dashboard
-6. Social graph (CEO perspective)
+3. Causal interaction graphs (CEO + government + agent use cases)
+4. Financial charts (demo data)
+5. Geopolitical map
+6. Regime dashboard
+7. Social graph (CEO perspective)
 
 Usage:
     python scripts/generate_assets.py
@@ -30,6 +31,9 @@ from general_unified_world_model.rendering import (
     RegimeDashboardRenderer,
     SocialGraphRenderer,
     RenderContext,
+    render_ceo_use_case,
+    render_government_use_case,
+    render_agent_use_case,
 )
 from canvas_engineering import compile_schema, ConnectivityPolicy
 
@@ -120,26 +124,37 @@ def render_financial_charts():
 
 
 def render_geopolitical_map():
-    """Geopolitical risk map."""
+    """Geopolitical state map with vector-to-RGB projection (static + GIF)."""
     print("Rendering: geopolitical_map...")
     proj = WorldProjection(include=["*"])
     bound = project(proj, T=1, H=128, W=128, d_model=64)
     ctx = RenderContext(
         bound_schema=bound,
-        title="Geopolitical Risk — Global State Projection",
+        title="Geopolitical State — Vector Projection to RGB",
     )
     r = GeopoliticalMapRenderer()
     r.save(ctx, ASSETS / "geopolitical_map.png", dpi=DPI)
 
+    print("Rendering: geopolitical_globe.gif (rotating)...")
+    r.render_rotating_gif(
+        ctx,
+        ASSETS / "geopolitical_globe.gif",
+        n_frames=72,
+        center_lat=20,
+        duration_ms=80,
+        dpi=100,
+        figsize=(6, 6),
+    )
+
 
 def render_regime_dashboard():
-    """Regime state dashboard."""
+    """Regime state dashboard — minimal bars."""
     print("Rendering: regime_dashboard...")
     proj = WorldProjection(include=["regime", "forecasts"])
     bound = project(proj, T=1, H=24, W=24, d_model=64)
     ctx = RenderContext(
         bound_schema=bound,
-        title="World Regime State — Latent Dashboard",
+        title="regime state",
     )
     r = RegimeDashboardRenderer()
     r.save(ctx, ASSETS / "regime_dashboard.png", dpi=DPI)
@@ -181,12 +196,45 @@ def render_canvas_hedge_fund():
     r.save(ctx, ASSETS / "canvas_hedge_fund.png", dpi=DPI)
 
 
+# ── Use-case causal interaction graphs ───────────────────────────────
+
+
+def render_usecase_ceo():
+    """CEO use case — causal interaction graph."""
+    print("Rendering: usecase_ceo...")
+    fig = render_ceo_use_case()
+    fig.savefig(ASSETS / "usecase_ceo.png", dpi=DPI, bbox_inches="tight")
+    import matplotlib.pyplot as plt
+    plt.close(fig)
+
+
+def render_usecase_government():
+    """Government use case — causal interaction graph."""
+    print("Rendering: usecase_government...")
+    fig = render_government_use_case()
+    fig.savefig(ASSETS / "usecase_government.png", dpi=DPI, bbox_inches="tight")
+    import matplotlib.pyplot as plt
+    plt.close(fig)
+
+
+def render_usecase_agent():
+    """Computer use agent use case — causal interaction graph."""
+    print("Rendering: usecase_agent...")
+    fig = render_agent_use_case()
+    fig.savefig(ASSETS / "usecase_agent.png", dpi=DPI, bbox_inches="tight")
+    import matplotlib.pyplot as plt
+    plt.close(fig)
+
+
 if __name__ == "__main__":
     render_canvas_full()
     render_canvas_macro()
     render_canvas_hedge_fund()
     render_topology_macro()
     render_topology_hedge_fund()
+    render_usecase_ceo()
+    render_usecase_government()
+    render_usecase_agent()
     render_financial_charts()
     render_geopolitical_map()
     render_regime_dashboard()
