@@ -13,7 +13,7 @@ Quick start:
     bound = project(proj, T=1, H=64, W=64, d_model=64)
 """
 
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 
 # Schema
 from general_unified_world_model.schema.world import World

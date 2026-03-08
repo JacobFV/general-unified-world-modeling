@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "general-unified-world-model"
-version = "0.0.2"
+version = "0.0.3"
 description = "General Unified World Model — a typed causal ontology of civilization, built on canvas-engineering structured latent spaces."
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -21,10 +21,8 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
-# TODO: Before deploying 0.0.3, switch canvas-engineering back to PyPI (>=0.2.0)
-# and ensure the new version is published first.
 dependencies = [
-    "canvas-engineering @ file:///Users/jacob/projects/canvas-engineering",
+    "canvas-engineering>=0.1.1",
     "torch>=2.0",
     "numpy>=1.24",
     "pandas>=2.0",
