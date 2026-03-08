@@ -35,47 +35,108 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 
-
-# ── Field Mapping ────────────────────────────────────────────────────────
-
 @dataclass
-class FieldMapping:
-    """Maps a column/key in a dataset to a field in the world model.
+class InputSpec:
+    """Declares an input modality that a dataset provides to the canvas.
 
     Args:
-        source_key: Key in the dataset dict (e.g. "gdp_growth_yoy")
-        target_field: Dotted path in the world model (e.g. "country_us.macro.output.gdp_nowcast")
-        transform: Optional function to normalize the raw value.
-            Receives (value: torch.Tensor) -> torch.Tensor of shape matching
-            the field's (h, w) spatial dimensions.
-        frequency: How often this field updates in the source data,
-            in units of the source's base timestep. None means every tick.
+        key: Column/key name in the raw data dict.
+        semantic_type: Natural language description of this modality,
+            used for semantic conditioning (e.g. "10-year US Treasury yield, daily").
+        field_path: Dotted path in the world model schema
+            (e.g. "country_us.macro.output.gdp_nowcast").
+        dtype: Data type hint for selecting default encoder.
+        encoder: Custom encoder module. If None, uses default for dtype.
+        region_size: Override canvas region size (number of positions).
+        transform: Optional pre-processing transform on raw values.
+        frequency: How often this field updates. None means every tick.
     """
-    source_key: str
-    target_field: str
+    key: str
+    semantic_type: str
+    field_path: str
+    dtype: str = "float32"
+    encoder: Any = None
+    region_size: Optional[int] = None
     transform: Optional[Callable[[torch.Tensor], torch.Tensor]] = None
     frequency: Optional[int] = None
 
 
 @dataclass
-class DatasetSpec:
-    """Declares how a dataset maps to the world model.
+class OutputSpec:
+    """Declares an output modality — where the model predicts and receives gradient.
 
     Args:
-        name: Human-readable name (e.g. "FRED macro", "Yahoo Finance daily")
-        mappings: List of FieldMappings from source columns to world model fields.
-        base_period: How many base ticks one row of this dataset represents.
-            E.g. if the dataset is daily and base tick is sub-minute: 16.
-            If the dataset is already at tick frequency: 1.
-        temporal_range: (start_tick, end_tick) in world model time.
-            None means the dataset spans the full training window.
-        weight: Relative importance of this dataset in mixed training.
+        key: Column/key name for ground truth data.
+        semantic_type: Natural language description of this modality.
+        field_path: Dotted path in the world model schema.
+        dtype: Data type hint for selecting default decoder.
+        decoder: Custom decoder module. If None, uses default for dtype.
+        loss_fn: Loss function name or callable. Default "mse".
+        loss_weight: Relative weight for this output's loss.
+        transform: Optional inverse transform on predictions.
+        frequency: How often this field updates.
+    """
+    key: str
+    semantic_type: str
+    field_path: str
+    dtype: str = "float32"
+    decoder: Any = None
+    loss_fn: str | Callable = "mse"
+    loss_weight: float = 1.0
+    transform: Optional[Callable[[torch.Tensor], torch.Tensor]] = None
+    frequency: Optional[int] = None
+
+
+# ── Default registries ──────────────────────────────────────────────────
+
+DEFAULT_ENCODERS: dict[str, Callable[[int], nn.Module]] = {
+    "float32": lambda d: nn.Sequential(nn.Linear(1, d), nn.LayerNorm(d), nn.GELU(), nn.Linear(d, d)),
+    "float64": lambda d: nn.Sequential(nn.Linear(1, d), nn.LayerNorm(d), nn.GELU(), nn.Linear(d, d)),
+    "int64": lambda d: nn.Sequential(nn.Linear(1, d), nn.LayerNorm(d), nn.GELU(), nn.Linear(d, d)),
+    "embedding": lambda d, dim=768: nn.Sequential(nn.Linear(dim, d), nn.LayerNorm(d)),
+}
+
+DEFAULT_DECODERS: dict[str, Callable[[int], nn.Module]] = {
+    "float32": lambda d: nn.Sequential(nn.Linear(d, d), nn.GELU(), nn.Linear(d, 1)),
+    "float64": lambda d: nn.Sequential(nn.Linear(d, d), nn.GELU(), nn.Linear(d, 1)),
+    "int64": lambda d: nn.Sequential(nn.Linear(d, d), nn.GELU(), nn.Linear(d, 1)),
+}
+
+DEFAULT_LOSS_FNS: dict[str, Callable] = {
+    "mse": F.mse_loss,
+    "l1": F.l1_loss,
+    "huber": F.huber_loss,
+}
+
+
+def _infer_semantic_type(field_path: str) -> str:
+    """Derive a human-readable semantic type from a dotted field path."""
+    return field_path.replace("_", " ").replace(".", " > ")
+
+
+@dataclass
+class DatasetSpec:
+    """Declares how a dataset maps onto the canvas.
+
+    Provide input_specs and output_specs to define the mapping.
     """
     name: str
-    mappings: list[FieldMapping]
+    description: str = ""
+    input_specs: list[InputSpec] = dc_field(default_factory=list)
+    output_specs: list[OutputSpec] = dc_field(default_factory=list)
     base_period: int = 1
     temporal_range: Optional[tuple[int, int]] = None
     weight: float = 1.0
+
+    @property
+    def all_field_paths(self) -> list[str]:
+        """All unique field paths from both input and output specs."""
+        paths = set()
+        for s in self.input_specs:
+            paths.add(s.field_path)
+        for s in self.output_specs:
+            paths.add(s.field_path)
+        return sorted(paths)
 
 
 # ── Heterogeneous Dataset ────────────────────────────────────────────────
@@ -114,19 +175,31 @@ class HeterogeneousDataset(Dataset):
         # Set of field names for fast lookup during coarse-grained routing
         self._field_name_set = set(bound_schema.field_names)
 
+        # Build dot→compiled name mapping for entity-prefixed fields.
+        # compile_schema uses "__" for entity prefixes (e.g. "financial__yield_curves.ten_year")
+        # but users write dotted paths (e.g. "financial.yield_curves.ten_year").
+        self._dot_to_compiled: dict[str, str] = {}
+        for name in bound_schema.field_names:
+            dot_name = name.replace("__", ".")
+            if dot_name != name:
+                self._dot_to_compiled[dot_name] = name
+
         # Precompute field indices for each source
         self._source_indices = []
         for spec, _ in sources:
             field_indices = {}
-            for mapping in spec.mappings:
-                target = mapping.target_field
+            for ispec in spec.input_specs:
+                target = ispec.field_path
+                # Normalize: try compiled name if dot-path doesn't match directly
+                if target in self._dot_to_compiled:
+                    target = self._dot_to_compiled[target]
                 try:
                     bf = bound_schema[target]
-                    field_indices[mapping.source_key] = {
+                    field_indices[ispec.key] = {
                         "bound_field": bf,
                         "indices": bf.indices(),
-                        "transform": mapping.transform,
-                        "frequency": mapping.frequency,
+                        "transform": ispec.transform,
+                        "frequency": ispec.frequency,
                         "is_coarse": False,
                     }
                 except (KeyError, AttributeError):
@@ -137,11 +210,11 @@ class HeterogeneousDataset(Dataset):
                     if coarse is not None:
                         try:
                             bf = bound_schema[coarse]
-                            field_indices[mapping.source_key] = {
+                            field_indices[ispec.key] = {
                                 "bound_field": bf,
                                 "indices": bf.indices(),
-                                "transform": mapping.transform,
-                                "frequency": mapping.frequency,
+                                "transform": ispec.transform,
+                                "frequency": ispec.frequency,
                                 "is_coarse": True,
                             }
                         except (KeyError, AttributeError):
@@ -153,10 +226,10 @@ class HeterogeneousDataset(Dataset):
         for src_idx, (spec, raw_data) in enumerate(sources):
             if callable(raw_data):
                 raw_data = raw_data()
-            # Determine dataset length from first mapping's data
+            # Determine dataset length from first input spec's data
             n_rows = 0
-            for mapping in spec.mappings:
-                key = mapping.source_key
+            for ispec in spec.input_specs:
+                key = ispec.key
                 if isinstance(raw_data, dict) and key in raw_data:
                     tensor = raw_data[key]
                     if isinstance(tensor, torch.Tensor) and tensor.dim() >= 1:
@@ -173,14 +246,19 @@ class HeterogeneousDataset(Dataset):
         """Walk up the field path to find a coarse-grained parent.
 
         If target_field is "country_us.politics.executive_stability"
-        and the schema has "country_us.politics" as a 1×1 coarse-grained
-        field, returns "country_us.politics".
+        and the schema has "country_us.politics" (or "country_us__politics")
+        as a 1×1 coarse-grained field, returns the compiled name.
         """
         parts = target_field.rsplit(".", 1)
         while len(parts) == 2:
             parent = parts[0]
+            # Try direct match
             if parent in self._field_name_set:
                 return parent
+            # Try compiled name (dot → __)
+            compiled = self._dot_to_compiled.get(parent)
+            if compiled and compiled in self._field_name_set:
+                return compiled
             parts = parent.rsplit(".", 1)
         return None
 
@@ -380,6 +458,7 @@ class MaskedCanvasTrainer:
         decoder: FieldDecoder,
         optimizer: torch.optim.Optimizer,
         device: str = "cuda",
+        conditioner: nn.Module | None = None,
     ):
         self.bound = bound_schema
         self.backbone = backbone.to(device)
@@ -387,6 +466,7 @@ class MaskedCanvasTrainer:
         self.decoder = decoder.to(device)
         self.optimizer = optimizer
         self.device = device
+        self.conditioner = conditioner.to(device) if conditioner is not None else None
 
         # Precompute loss weight mask
         self.loss_weight_mask = bound_schema.layout.loss_weight_mask(device)
@@ -413,6 +493,10 @@ class MaskedCanvasTrainer:
         canvas_data = batch["canvas_data"].to(self.device)
         presence_mask = batch["presence_mask"].to(self.device)
 
+        # Apply semantic conditioning before backbone
+        if self.conditioner is not None:
+            canvas_data = self.conditioner.condition_canvas(canvas_data, self.bound.layout)
+
         # Forward through backbone
         if self.attn_mask is not None:
             canvas_out = self.backbone(canvas_data, mask=self.attn_mask)
@@ -438,12 +522,14 @@ class MaskedCanvasTrainer:
         # Backward
         self.optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(
+        clip_params = (
             list(self.backbone.parameters())
             + list(self.encoder.parameters())
-            + list(self.decoder.parameters()),
-            max_norm=1.0,
+            + list(self.decoder.parameters())
         )
+        if self.conditioner is not None:
+            clip_params += list(self.conditioner.parameters())
+        torch.nn.utils.clip_grad_norm_(clip_params, max_norm=1.0)
         self.optimizer.step()
 
         return {

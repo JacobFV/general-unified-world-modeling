@@ -1,8 +1,8 @@
 """LLM-powered projection builder: describe your modeling needs in plain English.
 
 Uses raw HTTP calls to the Anthropic or OpenAI API — no SDK dependency.
-The LLM reads the full World schema field list and selects which paths,
-firms, individuals, countries, and sectors to include.
+The LLM reads the full World schema field list and selects which paths
+and entities to include.
 
 Usage:
     from general_unified_world_model.llm import llm_project
@@ -85,11 +85,9 @@ def _build_schema_description() -> str:
         lines.append("")
 
     lines.append("\nDynamic entities (add as many as needed):")
-    lines.append("  - firms: list of firm names (e.g. ['AAPL', 'NVDA'])")
-    lines.append("  - individuals: list of individual names (e.g. ['fed_chair', 'ceo_nvda'])")
-    lines.append("  - countries: additional country codes beyond us/cn/eu (e.g. ['jp', 'uk'])")
-    lines.append("  - sectors: additional sector names (e.g. ['healthcare', 'industrials'])")
-    lines.append("  - supply_chains: additional supply chain nodes (e.g. ['rare_earths'])")
+    lines.append("  Provide as a dict mapping names to types.")
+    lines.append("  Available types: Business, Individual, Country, Sector, SupplyChainNode")
+    lines.append("  Example: {\"firm_AAPL\": \"Business\", \"country_jp\": \"Country\", \"person_ceo\": \"Individual\"}")
 
     return "\n".join(lines)
 
@@ -102,11 +100,7 @@ You must respond with a JSON object containing:
 {
   "include": ["list", "of", "dotted.field.paths"],
   "exclude": [],
-  "firms": ["list", "of", "firm", "names"],
-  "individuals": ["list", "of", "individual", "names"],
-  "countries": ["list", "of", "country", "codes"],
-  "sectors": ["list", "of", "sector", "names"],
-  "supply_chains": ["list", "of", "supply_chain", "names"],
+  "entities": {"firm_AAPL": "Business", "country_jp": "Country", "person_ceo": "Individual"},
   "reasoning": "Brief explanation of why these fields were selected"
 }
 
@@ -116,8 +110,8 @@ Rules:
 3. Always include relevant "forecasts" sub-paths for the user's use case.
 4. Include "events" if the user needs real-time awareness.
 5. Include "trust" if the user needs epistemic calibration.
-6. For firms, use ticker symbols or short names. For individuals, use role-based names.
-7. Country codes: us, cn, eu, jp, uk, in, kr, br, ru, etc. The schema already includes us, cn, eu as defaults.
+6. Entity names should use prefixes: "firm_" for Business, "person_" for Individual, "country_" for Country, "sector_" for Sector, "sc_" for SupplyChainNode.
+7. Available entity types: Business, Individual, Country, Sector, SupplyChainNode.
 8. Respond ONLY with the JSON object. No markdown code fences, no extra text."""
 
 
@@ -195,6 +189,21 @@ def _parse_llm_response(text: str) -> dict:
     return json.loads(text)
 
 
+def _resolve_entities_from_response(parsed: dict) -> dict:
+    """Resolve entity specifications from LLM response to instances.
+
+    Handles the generic entities dict format:
+        {"firm_AAPL": "Business", "country_jp": "Country"}
+    """
+    from general_unified_world_model.training.dag_curriculum import _resolve_entities
+
+    entities_spec = parsed.get("entities", {})
+    if not entities_spec:
+        return {}
+
+    return _resolve_entities(entities_spec)
+
+
 # ── Public API ──────────────────────────────────────────────────────────
 
 @dataclass
@@ -268,7 +277,6 @@ def llm_project(
 
     # Validate include paths against the schema
     valid_domains = set(_get_top_level_domains())
-    all_paths = set(_get_all_field_paths())
     validated_includes = []
 
     for path in parsed.get("include", []):
@@ -280,15 +288,14 @@ def llm_project(
     if not validated_includes:
         validated_includes = ["*"]  # Fallback to everything
 
+    # Resolve entities
+    entities = _resolve_entities_from_response(parsed)
+
     # Build projection
     projection = WorldProjection(
         include=validated_includes,
         exclude=parsed.get("exclude", []),
-        firms=parsed.get("firms", []),
-        individuals=parsed.get("individuals", []),
-        countries=parsed.get("countries", []),
-        sectors=parsed.get("sectors", []),
-        supply_chains=parsed.get("supply_chains", []),
+        entities=entities,
     )
 
     return LLMProjectionResult(

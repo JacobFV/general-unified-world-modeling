@@ -10,8 +10,9 @@ integration. The semantic embedding conditioner makes this work: because
 dynamics are conditioned on field identity (not hardcoded heads), merged
 weights can handle any field type.
 
-Each training node is described linguistically. The description generates
-the WorldProjection via llm_project() or explicit field paths.
+Each training node specifies which world model fields to include and which
+entities to instantiate. Curriculum stages can be described in YAML or
+built programmatically by an LLM that examines available datasets.
 
 Example DAG:
                         ┌─ basic_finance ──────┐
@@ -42,8 +43,45 @@ from general_unified_world_model.projection.subset import WorldProjection, proje
 from general_unified_world_model.training.backbone import build_world_model, WorldModelBackbone
 from general_unified_world_model.training.heterogeneous import (
     FieldEncoder, FieldDecoder, MaskedCanvasTrainer,
-    DatasetSpec, build_mixed_dataloader,
+    DatasetSpec, InputSpec, OutputSpec, build_mixed_dataloader,
 )
+
+
+# ── Entity type registry ─────────────────────────────────────────────────
+
+def _resolve_entities(entities: dict[str, str]) -> dict[str, Any]:
+    """Resolve entity type names to instances.
+
+    Args:
+        entities: Dict mapping names to type names.
+            E.g. {"firm_AAPL": "Business", "country_jp": "Country"}.
+
+    Returns:
+        Dict mapping names to dataclass instances.
+    """
+    from general_unified_world_model.schema.business import Business
+    from general_unified_world_model.schema.individual import Individual
+    from general_unified_world_model.schema.sector import Sector
+    from general_unified_world_model.schema.supply_chain import SupplyChainNode
+    from general_unified_world_model.schema.country import Country
+
+    ENTITY_TYPES = {
+        "Business": Business,
+        "Individual": Individual,
+        "Sector": Sector,
+        "SupplyChainNode": SupplyChainNode,
+        "Country": Country,
+    }
+
+    result = {}
+    for name, type_name in entities.items():
+        if type_name not in ENTITY_TYPES:
+            raise ValueError(
+                f"Unknown entity type '{type_name}' for '{name}'. "
+                f"Valid types: {list(ENTITY_TYPES.keys())}"
+            )
+        result[name] = ENTITY_TYPES[type_name]()
+    return result
 
 
 # ── DAG Node Definition ───────────────────────────────────────────────────
@@ -58,6 +96,8 @@ class TrainingNode:
             Used for logging and optionally for llm_project().
         include: Explicit world model field paths to include.
         parents: Names of parent nodes (whose merged weights initialize this node).
+        entities: Dict mapping entity names to type names for YAML serialization.
+            E.g. {"firm_AAPL": "Business", "country_jp": "Country"}.
         H, W: Canvas dimensions.
         d_model: Latent dimension.
         n_layers: Transformer depth.
@@ -66,14 +106,12 @@ class TrainingNode:
         lr: Learning rate.
         batch_size: Batch size.
         data_sources: Names of data source keys to use.
-        firms: Dynamic firm entities.
-        individuals: Dynamic individual entities.
-        countries: Additional country codes.
     """
     name: str
     description: str
     include: list[str]
     parents: list[str] = dc_field(default_factory=list)
+    entities: dict[str, str] = dc_field(default_factory=dict)
     H: int | None = None
     W: int | None = None
     d_model: int = 64
@@ -83,9 +121,6 @@ class TrainingNode:
     lr: float = 1e-4
     batch_size: int = 32
     data_sources: list[str] = dc_field(default_factory=list)
-    firms: list[str] = dc_field(default_factory=list)
-    individuals: list[str] = dc_field(default_factory=list)
-    countries: list[str] = dc_field(default_factory=list)
 
 
 # ── Standard DAG Definitions ──────────────────────────────────────────────
@@ -168,7 +203,7 @@ TIER_2_COMPLEX = [
         description="Corporate decision-making in macro context: firm financials, competitive positioning, sector dynamics, executive incentives",
         include=["financial.equities", "country_us.macro", "regime", "forecasts.business"],
         parents=["econ_drives_finance"],
-        firms=["AAPL", "NVDA", "MSFT"],
+        entities={"firm_AAPL": "Business", "firm_NVDA": "Business", "firm_MSFT": "Business"},
         n_layers=8,
         data_sources=["yahoo_finance", "fred_macro"],
     ),
@@ -178,7 +213,7 @@ TIER_2_COMPLEX = [
         include=["country_us", "country_cn.macro", "country_eu.macro", "financial",
                  "interventions", "regime", "forecasts"],
         parents=["econ_drives_finance", "geopolitics_commodities"],
-        countries=["jp", "uk"],
+        entities={"country_jp": "Country", "country_uk": "Country"},
         n_layers=8,
         data_sources=["fred_macro", "fred_rates", "yahoo_finance"],
     ),
@@ -287,11 +322,10 @@ class DAGCurriculumTrainer:
 
     def _build_projection(self, node: TrainingNode):
         """Build a WorldProjection and BoundSchema from a node."""
+        entities = _resolve_entities(node.entities) if node.entities else {}
         proj = WorldProjection(
             include=node.include,
-            firms=node.firms,
-            individuals=node.individuals,
-            countries=node.countries,
+            entities=entities,
         )
         bound = project(proj, T=1, H=node.H, W=node.W, d_model=node.d_model)
         return proj, bound
@@ -437,6 +471,7 @@ class DAGCurriculumTrainer:
             trainer = MaskedCanvasTrainer(
                 bound, backbone, encoder, decoder, optimizer,
                 device=self.device,
+                conditioner=conditioner,
             )
 
             step = 0
@@ -560,172 +595,22 @@ class DAGCurriculumTrainer:
         self.run(tiers[tier])
 
 
-# ── Natural Language Curriculum Specification ────────────────────────────
-
-# Keyword → include path mapping for resolving natural language subjects
-# to world model field paths without requiring an LLM.
-SUBJECT_KEYWORDS: dict[str, list[str]] = {
-    # Financial
-    "financial": ["financial"],
-    "finance": ["financial"],
-    "yield": ["financial.yield_curves"],
-    "yield curve": ["financial.yield_curves"],
-    "credit": ["financial.credit"],
-    "equity": ["financial.equities"],
-    "equities": ["financial.equities"],
-    "stock": ["financial.equities"],
-    "fx": ["financial.fx"],
-    "currency": ["financial.fx"],
-    "crypto": ["financial.crypto"],
-    "bitcoin": ["financial.crypto"],
-    "liquidity": ["financial.liquidity"],
-    "central bank": ["financial.central_banks"],
-    "monetary": ["financial.central_banks"],
-    "derivatives": ["financial.equities", "financial.fx"],
-    "vix": ["financial.equities"],
-    "volatility": ["financial.equities"],
-    # Macro
-    "macro": ["country_us.macro"],
-    "macroeconomic": ["country_us.macro"],
-    "gdp": ["country_us.macro.output"],
-    "inflation": ["country_us.macro.inflation"],
-    "employment": ["country_us.macro.labor"],
-    "labor": ["country_us.macro.labor"],
-    "unemployment": ["country_us.macro.labor"],
-    "housing": ["country_us.macro.housing"],
-    "fiscal": ["country_us.macro.fiscal"],
-    "trade": ["country_us.macro.trade"],
-    # Countries
-    "us economy": ["country_us.macro"],
-    "china": ["country_cn.macro"],
-    "chinese": ["country_cn.macro"],
-    "europe": ["country_eu.macro"],
-    "european": ["country_eu.macro"],
-    # Politics
-    "politic": ["country_us.politics"],
-    "political": ["country_us.politics"],
-    "governance": ["country_us.politics"],
-    "geopolitic": ["country_us.politics", "country_cn.politics"],
-    "election": ["country_us.politics"],
-    # Resources
-    "resource": ["resources"],
-    "energy": ["resources.energy"],
-    "oil": ["resources.energy"],
-    "commodity": ["resources"],
-    "commodities": ["resources"],
-    "metal": ["resources.metals"],
-    "food": ["resources.food"],
-    "water": ["resources.water"],
-    "compute": ["resources.compute"],
-    # Technology
-    "technology": ["technology"],
-    "tech": ["technology"],
-    "ai": ["technology"],
-    "semiconductor": ["resources.compute", "technology"],
-    "biotech": ["technology"],
-    # Narratives
-    "narrative": ["narratives"],
-    "sentiment": ["narratives"],
-    "media": ["narratives.media"],
-    "positioning": ["narratives.positioning"],
-    # Regime & Events
-    "regime": ["regime"],
-    "event": ["events"],
-    "news": ["events"],
-    # Forecasts
-    "forecast": ["forecasts"],
-    "prediction": ["forecasts"],
-    # Business
-    "corporate": ["financial.equities"],
-    "firm": ["financial.equities"],
-    "company": ["financial.equities"],
-    "business": ["financial.equities"],
-    # New layers
-    "biology": ["biology"],
-    "ecological": ["biology"],
-    "ecosystem": ["biology"],
-    "disease": ["biology"],
-    "health": ["health"],
-    "healthcare": ["health"],
-    "infrastructure": ["infrastructure"],
-    "power grid": ["infrastructure.power"],
-    "transport": ["infrastructure.transport"],
-    "telecom": ["infrastructure.telecom"],
-    "cyber": ["cyber"],
-    "space": ["space"],
-    "satellite": ["space"],
-    "education": ["education"],
-    "legal": ["legal"],
-    "regulatory": ["legal"],
-}
-
-
-def resolve_subject(description: str) -> list[str]:
-    """Resolve a natural language subject description to include paths.
-
-    Matches keywords in the description against SUBJECT_KEYWORDS to build
-    a list of world model field paths. Falls back to broad include if no
-    keywords match.
-
-    Args:
-        description: Natural language description of the training subject.
-
-    Returns:
-        List of dotted field paths to include.
-
-    Example:
-        >>> resolve_subject("How inflation drives yield curves and credit spreads")
-        ['country_us.macro.inflation', 'financial.yield_curves', 'financial.credit']
-    """
-    desc_lower = description.lower()
-    includes = []
-    matched_keywords = set()
-
-    # Sort keywords by length (longest first) to match multi-word phrases
-    sorted_keywords = sorted(SUBJECT_KEYWORDS.keys(), key=len, reverse=True)
-
-    for keyword in sorted_keywords:
-        if keyword in desc_lower and keyword not in matched_keywords:
-            for path in SUBJECT_KEYWORDS[keyword]:
-                if path not in includes:
-                    includes.append(path)
-            matched_keywords.add(keyword)
-            # Also mark sub-keywords as matched to avoid duplication
-            for other in sorted_keywords:
-                if other in keyword and other != keyword:
-                    matched_keywords.add(other)
-
-    # Always include regime (it's the privileged latent)
-    if "regime" not in includes and includes:
-        includes.append("regime")
-
-    if not includes:
-        # Fallback: include everything if no keywords matched
-        includes = ["*"]
-
-    return includes
-
+# ── Curriculum Specification ──────────────────────────────────────────────
 
 @dataclass
-class CurriculumSubject:
-    """A single training subject within a curriculum stage.
+class Stage:
+    """A single training stage (unit of work) within a curriculum group.
 
     Args:
-        subject: Natural language description of what to learn.
+        description: Natural language description of what to learn.
         datasets: Data sources to use for training.
-        firms: Firms to instantiate as dynamic entities.
-        individuals: Individuals to instantiate.
-        countries: Additional countries to instantiate.
-        include: Explicit include paths (overrides NL resolution).
+        include: Explicit include paths (required — no NL resolution).
         H, W, d_model: Canvas dimensions (override defaults).
         n_layers, n_loops: Model architecture (override defaults).
         n_steps: Training steps (override defaults).
     """
-    subject: str
+    description: str
     datasets: list[str] = dc_field(default_factory=list)
-    firms: list[str] = dc_field(default_factory=list)
-    individuals: list[str] = dc_field(default_factory=list)
-    countries: list[str] = dc_field(default_factory=list)
     include: list[str] | None = None
     H: int | None = None
     W: int | None = None
@@ -736,37 +621,37 @@ class CurriculumSubject:
 
 
 @dataclass
-class CurriculumStage:
-    """A stage in the training curriculum.
+class StagesInParallel:
+    """A group of stages that train in parallel within a curriculum.
 
-    A stage contains parallel subjects (fork) that all train simultaneously
-    from the same parent weights. After all subjects in a stage complete,
-    their weights are merged (join) before proceeding to the next stage.
+    A group contains parallel stages (fork) that all train simultaneously
+    from the same parent weights. After all stages in a group complete,
+    their weights are merged (join) before proceeding to the next group.
 
     Args:
-        name: Stage name (e.g. "foundations", "cross_domain").
-        parallel: List of training subjects to run in parallel.
-        builds_on: Name of the previous stage (or None for the first).
+        name: Group name (e.g. "foundations", "cross_domain").
+        stages: List of training stages to run in parallel.
+        builds_on: Name of the previous group (or None for the first).
     """
     name: str
-    parallel: list[CurriculumSubject] = dc_field(default_factory=list)
+    stages: list[Stage] = dc_field(default_factory=list)
     builds_on: str | None = None
 
 
 @dataclass
 class CurriculumSpec:
-    """Full curriculum specification — a sequence of stages forming a DAG.
+    """Full curriculum specification — a sequence of stage groups forming a DAG.
 
-    Each stage forks into parallel subjects, trains them, then joins
-    (merges weights) before the next stage.
+    Each group forks into parallel stages, trains them, then joins
+    (merges weights) before the next group.
 
     Args:
         name: Curriculum name.
-        stages: Ordered list of stages.
+        plan: Ordered list of stage groups (StagesInParallel).
         defaults: Default hyperparameters for all nodes.
     """
     name: str = "curriculum"
-    stages: list[CurriculumStage] = dc_field(default_factory=list)
+    plan: list[StagesInParallel] = dc_field(default_factory=list)
     defaults: dict = dc_field(default_factory=lambda: {
         "d_model": 64,
         "n_layers": 4, "n_loops": 3,
@@ -776,9 +661,9 @@ class CurriculumSpec:
     def to_training_nodes(self) -> list[TrainingNode]:
         """Convert this curriculum spec to a list of TrainingNodes.
 
-        Each CurriculumSubject becomes a TrainingNode. Stages define
-        the DAG structure: all subjects within a stage share the same
-        parents (the subjects of the previous stage).
+        Each Stage becomes a TrainingNode. Groups (StagesInParallel) define
+        the DAG structure: all stages within a group share the same
+        parents (the stages of the previous group).
 
         Returns:
             List of TrainingNode instances ready for DAGCurriculumTrainer.
@@ -786,23 +671,23 @@ class CurriculumSpec:
         nodes = []
         prev_stage_names = []
 
-        for stage in self.stages:
-            stage_node_names = []
+        for group in self.plan:
+            group_node_names = []
 
-            for i, subj in enumerate(stage.parallel):
-                # Resolve include paths from natural language
-                include = subj.include or resolve_subject(subj.subject)
+            for i, stg in enumerate(group.stages):
+                # include must be specified explicitly
+                include = stg.include or ["*"]
 
                 # Generate a clean node name
-                name = f"{stage.name}_{i}" if len(stage.parallel) > 1 else stage.name
-                if len(stage.parallel) > 1:
-                    # Use first two keywords from subject
-                    words = subj.subject.lower().split()[:3]
+                name = f"{group.name}_{i}" if len(group.stages) > 1 else group.name
+                if len(group.stages) > 1:
+                    # Use first two keywords from description
+                    words = stg.description.lower().split()[:3]
                     clean = "_".join(w for w in words if w.isalnum())[:20]
-                    name = f"{stage.name}_{clean}"
+                    name = f"{group.name}_{clean}"
 
                 # Determine parents
-                if stage.builds_on and prev_stage_names:
+                if group.builds_on and prev_stage_names:
                     parents = list(prev_stage_names)
                 else:
                     parents = []
@@ -810,59 +695,50 @@ class CurriculumSpec:
                 # Merge defaults with overrides
                 d = dict(self.defaults)
                 for key in ["H", "W", "d_model", "n_layers", "n_loops", "n_steps"]:
-                    val = getattr(subj, key, None)
+                    val = getattr(stg, key, None)
                     if val is not None:
                         d[key] = val
 
                 node = TrainingNode(
                     name=name,
-                    description=subj.subject,
+                    description=stg.description,
                     include=include,
                     parents=parents,
                     H=d.get("H"), W=d.get("W"), d_model=d["d_model"],
                     n_layers=d["n_layers"], n_loops=d["n_loops"],
                     n_steps=d["n_steps"], lr=d.get("lr", 1e-4),
                     batch_size=d.get("batch_size", 32),
-                    data_sources=subj.datasets,
-                    firms=subj.firms,
-                    individuals=subj.individuals,
-                    countries=subj.countries,
+                    data_sources=stg.datasets,
                 )
                 nodes.append(node)
-                stage_node_names.append(name)
+                group_node_names.append(name)
 
-            prev_stage_names = stage_node_names
+            prev_stage_names = group_node_names
 
         return nodes
 
     def to_dict(self) -> dict:
         """Serialize to a plain dict (suitable for YAML/JSON output)."""
-        stages = []
-        for stage in self.stages:
-            subjects = []
-            for subj in stage.parallel:
-                s = {"subject": subj.subject}
-                if subj.datasets:
-                    s["datasets"] = subj.datasets
-                if subj.firms:
-                    s["firms"] = subj.firms
-                if subj.individuals:
-                    s["individuals"] = subj.individuals
-                if subj.countries:
-                    s["countries"] = subj.countries
-                if subj.include is not None:
-                    s["include"] = subj.include
+        groups = []
+        for group in self.plan:
+            stage_dicts = []
+            for stg in group.stages:
+                s = {"description": stg.description}
+                if stg.datasets:
+                    s["datasets"] = stg.datasets
+                if stg.include is not None:
+                    s["include"] = stg.include
                 for key in ["H", "W", "d_model", "n_layers", "n_loops", "n_steps"]:
-                    val = getattr(subj, key, None)
+                    val = getattr(stg, key, None)
                     if val is not None:
                         s[key] = val
-                subjects.append(s)
-            st = {"name": stage.name, "parallel": subjects}
-            if stage.builds_on:
-                st["builds_on"] = stage.builds_on
-            stages.append(st)
+                stage_dicts.append(s)
+            st = {"name": group.name, "stages": stage_dicts}
+            if group.builds_on:
+                st["builds_on"] = group.builds_on
+            groups.append(st)
 
-        return {"name": self.name, "defaults": dict(self.defaults), "stages": stages}
+        return {"name": self.name, "defaults": dict(self.defaults), "plan": groups}
 
     def to_yaml(self, path: str | Path) -> None:
         """Write this curriculum to a YAML file."""
@@ -875,57 +751,14 @@ class CurriculumSpec:
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> CurriculumSpec:
-        """Load a curriculum specification from a YAML file.
-
-        YAML format:
-            name: my_curriculum
-            defaults:
-              H: 48
-              W: 48
-              n_steps: 5000
-            stages:
-              - name: foundations
-                parallel:
-                  - subject: "Core financial markets: yields, credit, equities"
-                    datasets: [yahoo_finance, fred_rates]
-                  - subject: "US macroeconomic fundamentals"
-                    datasets: [fred_macro]
-              - name: cross_domain
-                builds_on: foundations
-                parallel:
-                  - subject: "How macro conditions drive financial markets"
-                    datasets: [fred_macro, yahoo_finance]
-        """
-        import yaml  # optional dependency
+        """Load a curriculum specification from a YAML file."""
+        import yaml
 
         path = Path(path)
         with open(path) as f:
             raw = yaml.safe_load(f)
 
-        defaults = raw.get("defaults", {})
-        stages = []
-
-        for stage_raw in raw.get("stages", []):
-            subjects = []
-            for s in stage_raw.get("parallel", []):
-                subjects.append(CurriculumSubject(
-                    subject=s["subject"],
-                    datasets=s.get("datasets", []),
-                    firms=s.get("firms", []),
-                    individuals=s.get("individuals", []),
-                    countries=s.get("countries", []),
-                    include=s.get("include"),
-                    H=s.get("H"), W=s.get("W"), d_model=s.get("d_model"),
-                    n_layers=s.get("n_layers"), n_loops=s.get("n_loops"),
-                    n_steps=s.get("n_steps"),
-                ))
-            stages.append(CurriculumStage(
-                name=stage_raw["name"],
-                parallel=subjects,
-                builds_on=stage_raw.get("builds_on"),
-            ))
-
-        return cls(name=raw.get("name", "curriculum"), stages=stages, defaults=defaults)
+        return cls.from_dict(raw)
 
     @classmethod
     def from_dict(cls, d: dict) -> CurriculumSpec:
@@ -934,112 +767,279 @@ class CurriculumSpec:
         Same structure as the YAML format.
         """
         defaults = d.get("defaults", {})
-        stages = []
+        groups = []
 
-        for stage_raw in d.get("stages", []):
-            subjects = []
-            for s in stage_raw.get("parallel", []):
-                subjects.append(CurriculumSubject(
-                    subject=s["subject"],
+        raw_groups = d.get("plan", [])
+
+        for group_raw in raw_groups:
+            stage_list = []
+            raw_stages = group_raw.get("stages", [])
+            for s in raw_stages:
+                description = s.get("description", "")
+                stage_list.append(Stage(
+                    description=description,
                     datasets=s.get("datasets", []),
-                    firms=s.get("firms", []),
-                    individuals=s.get("individuals", []),
-                    countries=s.get("countries", []),
                     include=s.get("include"),
                     H=s.get("H"), W=s.get("W"), d_model=s.get("d_model"),
                     n_layers=s.get("n_layers"), n_loops=s.get("n_loops"),
                     n_steps=s.get("n_steps"),
                 ))
-            stages.append(CurriculumStage(
-                name=stage_raw["name"],
-                parallel=subjects,
-                builds_on=stage_raw.get("builds_on"),
+            groups.append(StagesInParallel(
+                name=group_raw["name"],
+                stages=stage_list,
+                builds_on=group_raw.get("builds_on"),
             ))
 
-        return cls(name=d.get("name", "curriculum"), stages=stages, defaults=defaults)
+        return cls(name=d.get("name", "curriculum"), plan=groups, defaults=defaults)
 
 
-# ── Standard Curriculum (NL version) ─────────────────────────────────────
+# ── Dataset Profile ──────────────────────────────────────────────────────
 
-STANDARD_CURRICULUM = CurriculumSpec(
-    name="general_unified_world_model",
-    defaults={"d_model": 64, "n_layers": 6, "n_loops": 3, "n_steps": 5000},
-    stages=[
-        CurriculumStage(
-            name="foundations",
-            parallel=[
-                CurriculumSubject(
-                    subject="Core financial markets: yield curves, credit spreads, equity indices, FX, derivatives pricing",
-                    datasets=["yahoo_finance", "fred_rates"],
-                ),
-                CurriculumSubject(
-                    subject="US macroeconomic fundamentals: GDP, inflation, employment, housing, fiscal policy",
-                    datasets=["fred_macro"],
-                ),
-                CurriculumSubject(
-                    subject="Political systems, governance, and geopolitical dynamics",
-                ),
-                CurriculumSubject(
-                    subject="Natural resources, energy markets, and commodity supply chains",
-                    datasets=["yahoo_commodities"],
-                ),
-                CurriculumSubject(
-                    subject="Technology frontier: AI, semiconductors, biotech, quantum computing",
-                ),
-                CurriculumSubject(
-                    subject="Media narratives, investor positioning, and public sentiment",
-                    datasets=["news_embeddings"],
-                ),
+@dataclass
+class DatasetProfile:
+    """Metadata about a dataset for LLM-driven curriculum planning.
+
+    The LLM examines these profiles to decide how to structure the
+    training curriculum — which datasets to train in parallel, which
+    to pair for cross-domain transfer, and in what order.
+
+    Args:
+        name: Human-readable name (e.g. "FRED Macro", "Hospital EHR").
+        description: What this dataset contains and its domain.
+        input_specs: How columns map to world model field paths.
+        n_samples: Number of rows/samples in the dataset.
+        columns: Column names in the raw dataset.
+        temporal_range: Date range or tick range covered.
+        update_frequency: How often the data updates (e.g. "daily", "quarterly").
+        source: Where the data comes from ("local", "huggingface", "api").
+        metadata: Any additional metadata (README excerpts, tags, etc.).
+    """
+    name: str
+    description: str
+    input_specs: list[InputSpec] = dc_field(default_factory=list)
+    n_samples: int = 0
+    columns: list[str] = dc_field(default_factory=list)
+    temporal_range: str = ""
+    update_frequency: str = ""
+    source: str = "local"
+    metadata: dict[str, Any] = dc_field(default_factory=dict)
+
+    def summary(self) -> str:
+        """Generate a concise summary for LLM consumption."""
+        mapped = [f"  {m.key} → {m.field_path}" for m in self.input_specs[:20]]
+        mapped_str = "\n".join(mapped)
+        extra = f"\n  ... and {len(self.input_specs) - 20} more" if len(self.input_specs) > 20 else ""
+
+        parts = [
+            f"Dataset: {self.name}",
+            f"Source: {self.source}",
+            f"Description: {self.description}",
+            f"Samples: {self.n_samples}",
+        ]
+        if self.temporal_range:
+            parts.append(f"Temporal range: {self.temporal_range}")
+        if self.update_frequency:
+            parts.append(f"Update frequency: {self.update_frequency}")
+        if self.columns:
+            parts.append(f"Columns ({len(self.columns)}): {', '.join(self.columns[:15])}")
+            if len(self.columns) > 15:
+                parts[-1] += f", ... ({len(self.columns) - 15} more)"
+        if mapped:
+            parts.append(f"Field mappings:\n{mapped_str}{extra}")
+
+        return "\n".join(parts)
+
+
+def build_curriculum(
+    goal: str,
+    datasets: list[DatasetProfile],
+    provider: str = "anthropic",
+    api_key: str | None = None,
+    model: str | None = None,
+) -> CurriculumSpec:
+    """LLM-driven curriculum builder.
+
+    Examines available datasets and builds a multi-stage curriculum:
+    - Stage 1: Parallel domain training (each dataset within its modality)
+    - Stage 2: Paired cross-domain transfer (semantically close pairs)
+    - Stage 3: Full integration (all datasets on one canvas)
+    - Stage 4 (optional): 2nd order relationship associations
+
+    The LLM examines dataset metadata, field mappings, and semantic
+    distances between domains to design an optimal training schedule.
+
+    Args:
+        goal: Natural language description of what the user wants.
+            E.g. "fine-tune to learn cardiovascular patient health
+                  for our hospital using our private EHR dataset"
+        datasets: Available datasets with their metadata.
+        provider: "anthropic" or "openai".
+        api_key: API key (or set env var).
+        model: Model to use.
+
+    Returns:
+        CurriculumSpec ready for DAGCurriculumTrainer.
+
+    Note:
+        Stages 2+ require datasets to share a common world reference
+        frame (temporal alignment, geographic context). The LLM considers
+        this when deciding which datasets can be co-trained.
+    """
+    import dataclasses as _dc
+    import os
+    import urllib.request
+    import urllib.error
+
+    from general_unified_world_model.schema.world import World
+    from canvas_engineering import Field
+
+    # Build schema description
+    all_paths = []
+    def _walk(obj, prefix):
+        if not _dc.is_dataclass(obj):
+            return
+        for f in _dc.fields(obj):
+            val = getattr(obj, f.name)
+            fp = f"{prefix}.{f.name}" if prefix else f.name
+            if isinstance(val, Field):
+                all_paths.append(fp)
+            elif _dc.is_dataclass(val):
+                _walk(val, fp)
+    _walk(World(), "")
+
+    top_level = [f.name for f in _dc.fields(World)]
+
+    # Build dataset summaries
+    dataset_block = "\n\n".join(ds.summary() for ds in datasets)
+
+    system_prompt = f"""You are a training curriculum designer for the General Unified World Model.
+
+The world model has {len(all_paths)} fields across these top-level domains:
+{', '.join(top_level)}
+
+You are given:
+1. A user's goal description
+2. Available datasets with their field mappings
+
+Your job: design a multi-stage training curriculum as a JSON CurriculumSpec.
+
+## Curriculum stages
+
+Stage 1 — PARALLEL DOMAIN TRAINING:
+Train each dataset (or closely related group) independently within its modality structure.
+Multiple datasets can train in parallel if they cover different domains.
+
+Stage 2 — PAIRED CROSS-DOMAIN TRANSFER:
+Pair datasets that are semantically close (e.g. macro + financial, health + demographics).
+Co-train paired datasets on a shared canvas. This only works when datasets share a
+common world reference frame (same time period, compatible geography).
+
+Stage 3 — FULL INTEGRATION:
+Train all datasets together on one canvas. Again, requires shared reference frame.
+
+Stage 4 (optional) — 2ND ORDER ASSOCIATIONS:
+Associate the primary dataset's conditions to indirect/second-order relationships
+discovered in stages 1-3.
+
+## Output format
+Respond with ONLY a JSON object:
+{{
+  "name": "curriculum_name",
+  "defaults": {{"d_model": 64, "n_layers": 6, "n_loops": 3, "n_steps": 5000}},
+  "plan": [
+    {{
+      "name": "group_name",
+      "stages": [
+        {{
+          "description": "Description of what this stage trains",
+          "include": ["financial.yield_curves", "country_us.macro", "regime"],
+          "datasets": ["dataset_name"],
+          "n_layers": 6,
+          "n_steps": 5000
+        }}
+      ],
+      "builds_on": "previous_group_name_or_null"
+    }}
+  ],
+  "reasoning": "Why this curriculum structure was chosen"
+}}
+
+Rules:
+1. Each stage MUST have an explicit "include" list of dotted field paths.
+2. Use exact field paths from the schema. You can include whole domains (e.g. "financial")
+   or specific sub-paths (e.g. "financial.yield_curves").
+3. Always include "regime" in cross-domain and integration stages.
+4. Match dataset names exactly as provided.
+5. Only pair datasets in stage 2 if they plausibly share a temporal/geographic reference frame.
+6. Keep stage 1 lean — just the fields each dataset covers.
+"""
+
+    user_msg = f"""Goal: {goal}
+
+Available datasets:
+{dataset_block}"""
+
+    # Resolve API key
+    if api_key is None:
+        env_key = "ANTHROPIC_API_KEY" if provider == "anthropic" else "OPENAI_API_KEY"
+        api_key = os.environ.get(env_key)
+        if not api_key:
+            raise ValueError(f"No API key. Set {env_key} or pass api_key=.")
+
+    # Call the LLM
+    if provider == "anthropic":
+        body = json.dumps({
+            "model": model or "claude-sonnet-4-20250514",
+            "max_tokens": 4096,
+            "system": system_prompt,
+            "messages": [{"role": "user", "content": user_msg}],
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read().decode())
+        raw_text = "".join(
+            b["text"] for b in data.get("content", []) if b.get("type") == "text"
+        )
+    elif provider == "openai":
+        body = json.dumps({
+            "model": model or "gpt-4o-mini",
+            "max_tokens": 4096,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_msg},
             ],
-        ),
-        CurriculumStage(
-            name="cross_domain",
-            builds_on="foundations",
-            parallel=[
-                CurriculumSubject(
-                    subject="How macroeconomic conditions drive financial markets: GDP → equities, inflation → rates",
-                    datasets=["fred_macro", "fred_rates", "yahoo_finance"],
-                    n_layers=8,
-                ),
-                CurriculumSubject(
-                    subject="Geopolitical events driving commodity prices: sanctions → oil, trade wars → metals",
-                    datasets=["yahoo_commodities"],
-                ),
-                CurriculumSubject(
-                    subject="How media narratives and sentiment drive market dynamics",
-                    datasets=["yahoo_finance", "news_embeddings"],
-                ),
-            ],
-        ),
-        CurriculumStage(
-            name="complex_dynamics",
-            builds_on="cross_domain",
-            parallel=[
-                CurriculumSubject(
-                    subject="Corporate strategy and decision-making in macroeconomic context",
-                    firms=["AAPL", "NVDA", "MSFT"],
-                    datasets=["yahoo_finance", "fred_macro"],
-                    n_layers=8,
-                ),
-                CurriculumSubject(
-                    subject="Policy analysis: monetary transmission, fiscal multipliers, regulatory impact on markets",
-                    countries=["jp", "uk"],
-                    datasets=["fred_macro", "fred_rates", "yahoo_finance"],
-                    n_layers=8,
-                ),
-            ],
-        ),
-        CurriculumStage(
-            name="integration",
-            builds_on="complex_dynamics",
-            parallel=[
-                CurriculumSubject(
-                    subject="Full world model: all domains integrated, regime state receives gradient from everything",
-                    include=["*"],
-                    datasets=["yahoo_finance", "fred_macro", "fred_rates", "yahoo_commodities"],
-                    n_layers=12, n_steps=10000,
-                ),
-            ],
-        ),
-    ],
-)
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.openai.com/v1/chat/completions",
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read().decode())
+        raw_text = data["choices"][0]["message"]["content"]
+    else:
+        raise ValueError(f"Unknown provider: {provider}")
+
+    # Parse response
+    import re
+    text = raw_text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```\w*\n?", "", text)
+        text = re.sub(r"\n?```$", "", text)
+    text = text.strip()
+    parsed = json.loads(text)
+
+    return CurriculumSpec.from_dict(parsed)

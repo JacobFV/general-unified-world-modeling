@@ -28,9 +28,10 @@ from general_unified_world_model.training.heterogeneous import (
     HeterogeneousDataset,
     MaskedCanvasTrainer,
     DatasetSpec,
-    FieldMapping,
     FieldEncoder,
     FieldDecoder,
+    InputSpec,
+    OutputSpec,
     build_mixed_dataloader,
 )
 from general_unified_world_model.training.backbone import WorldModelBackbone, build_world_model
@@ -40,10 +41,10 @@ from general_unified_world_model.training.dag_curriculum import (
     DAGCurriculumTrainer,
     TrainingNode,
     CurriculumSpec,
-    CurriculumStage,
-    CurriculumSubject,
-    resolve_subject,
-    STANDARD_CURRICULUM,
+    Stage,
+    StagesInParallel,
+    DatasetProfile,
+    build_curriculum,
 )
 
 # Inference
