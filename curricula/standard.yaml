@@ -1,0 +1,73 @@
+name: general_unified_world_model
+
+defaults:
+  H: 48
+  W: 48
+  d_model: 64
+  n_layers: 6
+  n_loops: 3
+  n_steps: 5000
+  lr: 0.0001
+  batch_size: 32
+
+stages:
+  - name: foundations
+    parallel:
+      - subject: "Core financial markets: yield curves, credit spreads, equity indices, FX, derivatives pricing"
+        datasets: [yahoo_finance, fred_rates]
+
+      - subject: "US macroeconomic fundamentals: GDP, inflation, employment, housing, fiscal policy"
+        datasets: [fred_macro]
+
+      - subject: "Political systems, governance, and geopolitical dynamics"
+
+      - subject: "Natural resources, energy markets, and commodity supply chains"
+        datasets: [yahoo_commodities]
+
+      - subject: "Technology frontier: AI, semiconductors, biotech, quantum computing"
+
+      - subject: "Media narratives, investor positioning, and public sentiment"
+        datasets: [news_embeddings]
+
+  - name: cross_domain
+    builds_on: foundations
+    parallel:
+      - subject: "How macroeconomic conditions drive financial markets: GDP to equities, inflation to rates"
+        datasets: [fred_macro, fred_rates, yahoo_finance]
+        n_layers: 8
+        H: 64
+        W: 64
+
+      - subject: "Geopolitical events driving commodity prices: sanctions to oil, trade wars to metals"
+        datasets: [yahoo_commodities]
+
+      - subject: "How media narratives and sentiment drive market dynamics"
+        datasets: [yahoo_finance, news_embeddings]
+
+  - name: complex_dynamics
+    builds_on: cross_domain
+    parallel:
+      - subject: "Corporate strategy and decision-making in macroeconomic context"
+        firms: [AAPL, NVDA, MSFT]
+        datasets: [yahoo_finance, fred_macro]
+        n_layers: 8
+        H: 64
+        W: 64
+
+      - subject: "Policy analysis: monetary transmission, fiscal multipliers, regulatory impact on markets"
+        countries: [jp, uk]
+        datasets: [fred_macro, fred_rates, yahoo_finance]
+        n_layers: 8
+        H: 64
+        W: 64
+
+  - name: integration
+    builds_on: complex_dynamics
+    parallel:
+      - subject: "Full world model: all domains integrated, regime state receives gradient from everything"
+        include: ["*"]
+        datasets: [yahoo_finance, fred_macro, fred_rates, yahoo_commodities]
+        n_layers: 12
+        H: 128
+        W: 128
+        n_steps: 10000

@@ -835,6 +835,44 @@ class CurriculumSpec:
 
         return nodes
 
+    def to_dict(self) -> dict:
+        """Serialize to a plain dict (suitable for YAML/JSON output)."""
+        stages = []
+        for stage in self.stages:
+            subjects = []
+            for subj in stage.parallel:
+                s = {"subject": subj.subject}
+                if subj.datasets:
+                    s["datasets"] = subj.datasets
+                if subj.firms:
+                    s["firms"] = subj.firms
+                if subj.individuals:
+                    s["individuals"] = subj.individuals
+                if subj.countries:
+                    s["countries"] = subj.countries
+                if subj.include is not None:
+                    s["include"] = subj.include
+                for key in ["H", "W", "d_model", "n_layers", "n_loops", "n_steps"]:
+                    val = getattr(subj, key, None)
+                    if val is not None:
+                        s[key] = val
+                subjects.append(s)
+            st = {"name": stage.name, "parallel": subjects}
+            if stage.builds_on:
+                st["builds_on"] = stage.builds_on
+            stages.append(st)
+
+        return {"name": self.name, "defaults": dict(self.defaults), "stages": stages}
+
+    def to_yaml(self, path: str | Path) -> None:
+        """Write this curriculum to a YAML file."""
+        import yaml
+
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w") as f:
+            yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False, width=120)
+
     @classmethod
     def from_yaml(cls, path: str | Path) -> CurriculumSpec:
         """Load a curriculum specification from a YAML file.
