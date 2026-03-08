@@ -115,6 +115,27 @@ bound = project(
   <figcaption>Regime latent: growth, inflation, financial cycle, credit cycle, liquidity, fragility, and systemic risk. The regime determines which causal channels are active.</figcaption>
 </figure>
 
+## RL environments from world models
+
+Extract Gymnasium environments from trained world models. The same dynamics model yields different agent perspectives — employee navigation, CEO strategy, robot control — each with its own reward landscape.
+
+```python
+env = model.to_openenv(
+    obs_fields=["firm.financials.revenue", "regime.growth_regime"],
+    act_fields=["firm.strategy.capital_allocation"],
+    reward_fn=lambda obs, act, info: obs["firm.financials.revenue"].mean(),
+)
+obs, info = env.reset()
+obs, reward, terminated, truncated, info = env.step(env.action_space.sample())
+```
+
+<figure markdown>
+  ![Environment extraction](assets/env_hero.png){ loading=lazy }
+  <figcaption>One world model → many RL environments. Each agent observes and controls different fields, producing different reward landscapes from the same dynamics.</figcaption>
+</figure>
+
+See [Environment Extraction](environments.md) for full docs, multi-agent support, and examples.
+
 ## The 19 layers
 
 | Layer | Fields | Frequency | What it models |

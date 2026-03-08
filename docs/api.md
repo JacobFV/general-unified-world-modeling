@@ -264,6 +264,33 @@ predictions = model.predict()
 | `n_layers` | `int` | Backbone depth (default 6). |
 | `n_loops` | `int` | Looped attention iterations (default 3). |
 
+#### `WorldModel.to_openenv(obs_fields, act_fields, reward_fn, ...)`
+
+Extract a Gymnasium RL environment from this world model. See [Environment Extraction](environments.md) for full docs.
+
+```python
+env = model.to_openenv(
+    obs_fields=["firm.financials.revenue", "regime.growth_regime"],
+    act_fields=["firm.strategy.capital_allocation"],
+    reward_fn=lambda obs, act, info: obs["firm.financials.revenue"].mean(),
+)
+obs, info = env.reset()
+obs, reward, terminated, truncated, info = env.step(env.action_space.sample())
+```
+
+#### `WorldModel.to_multi_openenv(agents, ...)`
+
+Extract a multi-agent environment. All agents share one `predict()` call.
+
+```python
+from general_unified_world_model import AgentSpec
+
+multi = model.to_multi_openenv(agents={
+    "a": AgentSpec(obs_fields=[...], act_fields=[...], reward_fn=...),
+    "b": AgentSpec(obs_fields=[...], act_fields=[...], reward_fn=...),
+})
+```
+
 #### `GeneralUnifiedWorldModel.project_subset(include, exclude, entities)`
 
 Create a new `GeneralUnifiedWorldModel` from a subset of the current model's fields.

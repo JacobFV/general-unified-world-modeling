@@ -71,5 +71,7 @@ nav:
     - CogVideoX Backbone: cogvideox.md
     - DAG Curriculum: dag_curriculum.md
     - Datasets: datasets.md
+  - Environments:
+    - Environment Extraction: environments.md
   - API Reference: api.md
   - Examples: examples.md

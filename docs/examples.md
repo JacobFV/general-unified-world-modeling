@@ -12,6 +12,9 @@ Example scripts are in the [`examples/`](https://github.com/JacobFV/general-unif
 | `04_computer_use_agent.py` | Agent use case: user psychology + world context | [:octicons-code-16:](https://github.com/JacobFV/general-unified-world-modeling/blob/develop/examples/04_computer_use_agent.py) |
 | `05_train_financial.py` | Train on real FRED + Yahoo Finance data | [:octicons-code-16:](https://github.com/JacobFV/general-unified-world-modeling/blob/develop/examples/05_train_financial.py) |
 | `06_curriculum_training.py` | Full DAG curriculum training | [:octicons-code-16:](https://github.com/JacobFV/general-unified-world-modeling/blob/develop/examples/06_curriculum_training.py) |
+| `08_corporate_envs.py` | Corporate multi-agent RL environments | [:octicons-code-16:](https://github.com/JacobFV/general-unified-world-modeling/blob/develop/examples/08_corporate_envs.py) |
+| `09_robot_envs.py` | Robot morphology envs from physical dynamics | [:octicons-code-16:](https://github.com/JacobFV/general-unified-world-modeling/blob/develop/examples/09_robot_envs.py) |
+| `10_worldenv_trl_training.py` | WorldEnv + TRL GRPO training (OpenEnv hackathon) | [:octicons-code-16:](https://github.com/JacobFV/general-unified-world-modeling/blob/develop/examples/10_worldenv_trl_training.py) |
 
 ## Quick examples
 
