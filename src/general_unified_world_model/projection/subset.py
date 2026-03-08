@@ -8,11 +8,13 @@ For each case, they declare a projection — a subset of the World schema with
 a particular connectivity topology — and compile it to a canvas. The full
 ontology is always available; the projection selects what's active.
 
-Fog regions: when you project to a subset, any excluded sub-types get
-collapsed into 1×1 "fog" vectors that represent the aggregate of the
-unmodeled portion. Fog vectors connect to their parent and siblings,
-learning simpler dynamics as a stand-in for everything beyond the
-modeled level of abstraction.
+Coarse-graining: when you include a parent path (e.g. "country_us.macro"),
+any sibling sub-types not explicitly included (politics, demographics, etc.)
+are automatically collapsed to 1×1 coarse-grained fields. These keep
+their original name — "country_us.politics" stays "country_us.politics"
+whether it's 40 positions (fully expanded) or 1 position (coarse-grained).
+This means encoders/decoders keyed by field name transfer across projections
+without re-learning.
 
 Usage:
     from general_unified_world_model import World, WorldProjection, project
@@ -21,17 +23,17 @@ Usage:
     proj = WorldProjection(
         include=[
             "financial",
-            "country_us.macro",       # macro only — politics gets fog
+            "country_us.macro",       # macro only — politics coarse-grained
             "regime",
-            "narratives.positioning",  # positioning only — media gets fog
+            "narratives.positioning",  # positioning only — media coarse-grained
         ],
         firms=["AAPL", "NVDA"],
     )
 
-    bound = project(proj, T=1, H=64, W=64, d_model=64)
-    # bound now has fog fields like:
-    #   country_us._fog_politics (1×1 fog for politics)
-    #   narratives._fog_media    (1×1 fog for media)
+    bound = project(proj, T=1, d_model=64)
+    # bound has coarse-grained fields like:
+    #   country_us.politics  (1×1 coarse-grained)
+    #   narratives.media     (1×1 coarse-grained)
 """
 
 from __future__ import annotations
@@ -74,7 +76,7 @@ class ProjectedWorld:
     pass
 
 
-# ── Fog helpers ────────────────────────────────────────────────────────
+# ── Coarse-graining helpers ────────────────────────────────────────────
 
 def _count_leaf_fields(obj) -> int:
     """Count total Field instances in an object tree."""
@@ -119,15 +121,20 @@ def _has_included_descendant(path: str, include_paths: list[str]) -> bool:
     return any(p.startswith(path + ".") for p in include_paths)
 
 
-def _apply_fog_to_object(obj, parent_path: str, include_paths: list[str]):
-    """Replace excluded sub-dataclasses with 1×1 fog Field instances.
+def _coarse_grain(obj, parent_path: str, include_paths: list[str]):
+    """Coarse-grain excluded sub-dataclasses to 1×1 Fields.
 
     Walks the object's children. For each child sub-dataclass:
     - If directly included → keep as-is
     - If has included descendants → recurse (partial inclusion)
-    - Otherwise → replace with a fog field
+    - Otherwise → replace with a single Field(1, 1) at the same name
 
-    Returns a new dataclass instance (or the original if no fog needed).
+    The key property: coarse-grained fields keep their original name.
+    "country_us.politics" stays "country_us.politics" whether it's 40
+    positions or 1. This means encoders, decoders, and semantic conditioning
+    all transfer across projections without re-learning.
+
+    Returns a new dataclass instance (or the original if unchanged).
     """
     if not dataclasses.is_dataclass(obj):
         return obj
@@ -140,7 +147,7 @@ def _apply_fog_to_object(obj, parent_path: str, include_paths: list[str]):
         child_val = getattr(obj, f.name)
 
         if isinstance(child_val, Field):
-            # Leaf Field — always keep (it's part of an included type)
+            # Leaf Field — always keep
             new_fields.append((f.name, child_val))
 
         elif dataclasses.is_dataclass(child_val):
@@ -148,19 +155,20 @@ def _apply_fog_to_object(obj, parent_path: str, include_paths: list[str]):
                 # Fully included — keep as-is
                 new_fields.append((f.name, child_val))
             elif _has_included_descendant(child_path, include_paths):
-                # Partially included — recurse to fog the non-included parts
-                filtered = _apply_fog_to_object(child_val, child_path, include_paths)
+                # Partially included — recurse
+                filtered = _coarse_grain(child_val, child_path, include_paths)
                 new_fields.append((f.name, filtered))
                 modified = True
             else:
-                # Not included at all — replace with fog field
+                # Not included — coarse-grain to a single 1×1 Field.
+                # Keep the original field name so weights transfer.
                 n = _count_leaf_fields(child_val)
                 mp = _get_median_period(child_val)
-                fog = Field(
+                coarse = Field(
                     1, 1, period=mp,
-                    semantic_type=f"fog: {n} unmodeled fields of {child_path}",
+                    semantic_type=f"coarse({n}) {child_path}",
                 )
-                new_fields.append((f"_fog_{f.name}", fog))
+                new_fields.append((f.name, coarse))
                 modified = True
 
         elif isinstance(child_val, (list, tuple)):
@@ -177,10 +185,10 @@ def _apply_fog_to_object(obj, parent_path: str, include_paths: list[str]):
                 default_factory=lambda v=val: copy.deepcopy(v)))
         )
 
-    FoggedType = dataclasses.make_dataclass(
-        f"Fogged_{type(obj).__name__}", dc_field_specs
+    CoarseType = dataclasses.make_dataclass(
+        f"Coarse_{type(obj).__name__}", dc_field_specs
     )
-    return FoggedType()
+    return CoarseType()
 
 
 # ── Projection logic ──────────────────────────────────────────────────
@@ -194,16 +202,15 @@ def _make_projected_dataclass(
     extra_sectors: dict[str, Sector],
     extra_supply_chains: dict[str, SupplyChainNode],
     extra_countries: dict[str, Country],
-    fog: bool = True,
 ):
     """Dynamically construct a projected dataclass from the World.
 
     Since compile_schema only walks dataclass fields, we build a new
     dataclass at runtime with exactly the fields we need.
 
-    When fog=True, excluded sub-types within included parents are
-    replaced with 1×1 fog fields that represent the aggregate of
-    the unmodeled portion.
+    When a parent is included via a sub-path match, excluded children
+    are automatically coarse-grained to 1×1 Fields with their original
+    names preserved.
     """
     fields_dict = {}
 
@@ -216,10 +223,9 @@ def _make_projected_dataclass(
 
         if is_wildcard or _any_path_matches(path, include_paths):
             if not _any_path_matches(path, exclude_paths):
-                # Check if this was included via sub-path match (needs fog)
-                if fog and not is_wildcard and not _is_directly_included(path, include_paths):
-                    # Included because a sub-path matched — apply fog
-                    val = _apply_fog_to_object(val, path, include_paths)
+                # If included via sub-path, coarse-grain excluded children
+                if not is_wildcard and not _is_directly_included(path, include_paths):
+                    val = _coarse_grain(val, path, include_paths)
 
                 fields_dict[path] = val
 
@@ -266,19 +272,17 @@ def _any_path_matches(field_path: str, patterns: list[str]) -> bool:
 class WorldProjection:
     """Declares which subset of the World schema to activate.
 
+    Any sub-type not explicitly included is automatically coarse-grained
+    to a single 1×1 position, keeping its original field name. This means
+    encoders/decoders transfer across projections without re-learning.
+
     Args:
         include: List of dotted paths into the World schema to include.
             E.g. ["financial", "country_us.macro", "regime"].
             Use "*" to include everything.
+            Sub-paths pull in the parent; siblings are coarse-grained.
 
         exclude: List of dotted paths to exclude (applied after include).
-
-        fog: Whether to generate fog regions for excluded sub-types.
-            When True (default), any excluded sub-type within an included
-            parent is replaced with a 1×1 fog field that represents the
-            aggregate of the unmodeled portion. Fog fields participate in
-            attention, learning simpler dynamics as stand-ins for everything
-            beyond the modeled level of abstraction.
 
         firms: Named firm instances to add. Each becomes a Business block.
             E.g. ["AAPL", "NVDA", "TSMC"].
@@ -303,7 +307,6 @@ class WorldProjection:
     """
     include: list[str] = dc_field(default_factory=lambda: ["*"])
     exclude: list[str] = dc_field(default_factory=list)
-    fog: bool = True
 
     firms: list[str] = dc_field(default_factory=list)
     individuals: list[str] = dc_field(default_factory=list)
@@ -386,11 +389,11 @@ def project(
     when not specified — like a C compiler allocating struct memory.
     Override H, W only when you need a specific grid size.
 
-    When fog=True in the projection, excluded sub-types are replaced
-    with 1×1 fog regions. For example, include=["country_us.macro"]
-    will include the full macro sub-type but create fog fields for
-    politics, demographics, etc. Fog fields participate in attention
-    and learn to predict the compressed dynamics of the excluded region.
+    Excluded sub-types within included parents are automatically
+    coarse-grained to 1×1 positions. For example,
+    include=["country_us.macro"] will expand the macro sub-type fully
+    but coarse-grain politics, demographics, etc. to single positions.
+    Their field names stay the same, so weights transfer across projections.
 
     Args:
         proj: WorldProjection declaring the subset.
@@ -420,7 +423,6 @@ def project(
         world, proj.include, proj.exclude,
         extra_firms, extra_individuals, extra_sectors,
         extra_supply_chains, extra_countries,
-        fog=proj.fog,
     )
 
     # Auto-size canvas if H, W not specified

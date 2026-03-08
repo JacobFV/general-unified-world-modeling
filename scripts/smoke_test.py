@@ -292,25 +292,27 @@ def test_inference():
 
 
 def test_fog_regions():
-    """Test 8: Fog regions for partial projections."""
-    print("\n8. Fog Regions")
-    with timer("fog projection"):
-        proj = WorldProjection(include=["financial.yield_curves", "regime"], fog=True)
+    """Test 8: Coarse-grained regions for partial projections."""
+    print("\n8. Coarse-Grained Regions")
+    with timer("coarse-grained projection"):
+        proj = WorldProjection(include=["financial.yield_curves", "regime"])
         bound = project(proj, T=1, H=24, W=24, d_model=32)
 
-    fog_fields = [n for n in bound.field_names if "_fog_" in n]
-    regular_fields = [n for n in bound.field_names if "_fog_" not in n]
-    print(f"  {len(regular_fields)} modeled fields, {len(fog_fields)} fog regions")
-    assert len(fog_fields) > 0, "Expected fog fields"
+    # Coarse-grained siblings should exist with original names
+    coarse_names = ["financial.credit", "financial.fx", "financial.liquidity",
+                    "financial.equities", "financial.crypto", "financial.central_banks"]
+    for name in coarse_names:
+        assert name in bound.field_names, f"Expected coarse-grained field {name}"
+    print(f"  {len(bound.field_names)} total fields, {len(coarse_names)} coarse-grained")
 
-    # Each fog field should have connectivity
-    fog_conns = [c for c in bound.topology.connections
-                 if "_fog_" in c.src or "_fog_" in c.dst]
-    print(f"  {len(fog_conns)} fog connections")
-    assert len(fog_conns) > 0
+    # Coarse-grained fields should have connectivity
+    coarse_conns = [c for c in bound.topology.connections
+                    if c.src in coarse_names or c.dst in coarse_names]
+    print(f"  {len(coarse_conns)} coarse-grained connections")
+    assert len(coarse_conns) > 0
 
-    # Fog semantic types should be descriptive
-    for name in fog_fields[:2]:
+    # Semantic types should be descriptive
+    for name in coarse_names[:2]:
         print(f"  {name}: {bound[name].spec.semantic_type}")
 
 

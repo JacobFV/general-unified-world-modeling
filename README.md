@@ -29,8 +29,8 @@ Traditional approaches either:
 - **(b)** impute missing values — introduce noise
 
 **General Unified World Model** uses two complementary tools:
-- **(c1) Fog** — at projection time, collapse excluded schema sub-types into 1×1 learned "fog vectors" that represent the uncertainty and simplification of causal structures beyond your projection's concern. A hedge fund modeling only `financial.yield_curves` still gets a `financial._fog_credit` vector that learns compressed dynamics for the unmodeled credit sub-type.
-- **(c2) Mask** — at training time, zero out the loss for fields that lack data in the current dataset. The model still predicts everywhere, but only backpropagates through fields with ground truth. A GDP-only dataset trains the macro fields and the shared regime latent without needing equity prices.
+- **(c1) Coarse-graining** — at projection time, excluded sub-types collapse to 1×1 positions that keep their original field name. A hedge fund modeling only `financial.yield_curves` still has a `financial.credit` position — just compressed to one vector instead of ten. Because names are stable, encoders and decoders transfer across projections without re-learning.
+- **(c2) Masking** — at training time, zero out the loss for fields that lack data in the current dataset. The model still predicts everywhere, but only backpropagates through fields with ground truth. A GDP-only dataset trains the macro fields and the shared regime latent without needing equity prices.
 
 The key enabler is **canvas-engineering** — a type system for multimodal latent computation. Each field in the world model occupies specific positions on a 3D `(T, H, W)` canvas grid, with declared temporal frequency, loss weight, and connectivity. The topology is the compute graph.
 

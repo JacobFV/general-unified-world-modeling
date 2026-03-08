@@ -7,9 +7,10 @@ have demographics. Traditional approaches either:
   (b) impute missing fields — introduces noise
 
 Canvas engineering gives us two complementary tools:
-  (c1) fog — at projection time, collapse excluded schema sub-types into
-       1×1 learned placeholders that still participate in attention
-  (c2) mask — at training time, zero out loss for fields that lack data
+  (c1) coarse-graining — at projection time, excluded sub-types collapse
+       to 1×1 positions that still participate in attention, keeping their
+       original field names so encoders/decoders transfer across projections
+  (c2) masking — at training time, zero out loss for fields that lack data
        in the current dataset (the model still predicts them, just no gradient)
 
 Each dataset declares which fields it populates. The trainer:
@@ -120,17 +121,8 @@ class HeterogeneousDataset(Dataset):
         self.d_model = bound_schema.layout.d_model
         self.n_positions = bound_schema.layout.num_positions
 
-        # Build fog routing table: map excluded field paths to their fog fields.
-        # A fog field named "parent._fog_child" covers all original fields
-        # under "parent.child.*".
-        self._fog_routes: dict[str, str] = {}  # original_prefix → fog_field_name
-        for name in bound_schema.field_names:
-            if "._fog_" in name:
-                # e.g. "country_us._fog_politics" covers "country_us.politics.*"
-                parts = name.rsplit("._fog_", 1)
-                if len(parts) == 2:
-                    original_prefix = f"{parts[0]}.{parts[1]}"
-                    self._fog_routes[original_prefix] = name
+        # Set of field names for fast lookup during coarse-grained routing
+        self._field_name_set = set(bound_schema.field_names)
 
         # Precompute field indices for each source
         self._source_indices = []
@@ -145,20 +137,22 @@ class HeterogeneousDataset(Dataset):
                         "indices": bf.indices(),
                         "transform": mapping.transform,
                         "frequency": mapping.frequency,
-                        "is_fog": False,
+                        "is_coarse": False,
                     }
                 except (KeyError, AttributeError):
-                    # Field not in projection — try routing to its fog field
-                    fog_name = self._find_fog_field(target)
-                    if fog_name is not None:
+                    # Field not in projection — try routing to a
+                    # coarse-grained parent (e.g. "country_us.politics"
+                    # covers "country_us.politics.executive_stability")
+                    coarse = self._find_coarse_parent(target)
+                    if coarse is not None:
                         try:
-                            bf = bound_schema[fog_name]
+                            bf = bound_schema[coarse]
                             field_indices[mapping.source_key] = {
                                 "bound_field": bf,
                                 "indices": bf.indices(),
                                 "transform": mapping.transform,
                                 "frequency": mapping.frequency,
-                                "is_fog": True,
+                                "is_coarse": True,
                             }
                         except (KeyError, AttributeError):
                             pass
@@ -185,16 +179,19 @@ class HeterogeneousDataset(Dataset):
             for t in range(max(0, n_rows - seq_len + 1)):
                 self._samples.append((src_idx, t))
 
-    def _find_fog_field(self, target_field: str) -> str | None:
-        """Find the fog field that covers a given target field path.
+    def _find_coarse_parent(self, target_field: str) -> str | None:
+        """Walk up the field path to find a coarse-grained parent.
 
-        If target_field is "country_us.politics.executive_stability" and
-        the projection has "country_us._fog_politics", this returns
-        "country_us._fog_politics".
+        If target_field is "country_us.politics.executive_stability"
+        and the schema has "country_us.politics" as a 1×1 coarse-grained
+        field, returns "country_us.politics".
         """
-        for original_prefix, fog_name in self._fog_routes.items():
-            if target_field == original_prefix or target_field.startswith(original_prefix + "."):
-                return fog_name
+        parts = target_field.rsplit(".", 1)
+        while len(parts) == 2:
+            parent = parts[0]
+            if parent in self._field_name_set:
+                return parent
+            parts = parent.rsplit(".", 1)
         return None
 
     def __len__(self):
@@ -208,9 +205,9 @@ class HeterogeneousDataset(Dataset):
         # Create empty canvas-shaped tensors
         canvas_data = torch.zeros(self.n_positions, self.d_model)
         presence_mask = torch.zeros(self.n_positions)
-        # Track fog aggregation: multiple source fields may route to the same
-        # fog position — accumulate values and average at the end.
-        fog_accum: dict[int, list[float]] = {}
+        # Multiple source fields may route to the same coarse-grained
+        # position — accumulate values and average at the end.
+        coarse_accum: dict[int, list[float]] = {}
 
         for source_key, info in field_info.items():
             if not isinstance(raw_data, dict) or source_key not in raw_data:
@@ -240,15 +237,13 @@ class HeterogeneousDataset(Dataset):
             # Place into canvas positions
             indices = info["indices"]
 
-            if info.get("is_fog", False):
-                # Fog field: accumulate values for later averaging.
-                # The fog position learns to predict the mean of all
-                # excluded-field values that were routed to it.
+            if info.get("is_coarse", False):
+                # Coarse-grained: accumulate and average later
                 value_flat = value.reshape(-1)
                 for pos_idx in indices:
                     if pos_idx < self.n_positions:
                         mean_val = value_flat.mean().item()
-                        fog_accum.setdefault(pos_idx, []).append(mean_val)
+                        coarse_accum.setdefault(pos_idx, []).append(mean_val)
             else:
                 # Regular field: place directly
                 value_flat = value.reshape(-1)
@@ -258,8 +253,8 @@ class HeterogeneousDataset(Dataset):
                             canvas_data[pos_idx, 0] = value_flat[i]
                         presence_mask[pos_idx] = 1.0
 
-        # Finalize fog positions: average all routed values
-        for pos_idx, values in fog_accum.items():
+        # Finalize coarse-grained positions: average all routed values
+        for pos_idx, values in coarse_accum.items():
             canvas_data[pos_idx, 0] = sum(values) / len(values)
             presence_mask[pos_idx] = 1.0
 
