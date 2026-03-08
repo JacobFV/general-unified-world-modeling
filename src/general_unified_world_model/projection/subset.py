@@ -41,7 +41,9 @@ import dataclasses
 from dataclasses import dataclass, field as dc_field
 from typing import Optional, Union
 
-from canvas_engineering import Field, ConnectivityPolicy, compile_schema
+from collections import defaultdict
+
+from canvas_engineering import Field, Connection, ConnectivityPolicy, compile_schema
 
 from general_unified_world_model.schema.world import World
 from general_unified_world_model.schema.business import Business
@@ -379,4 +381,96 @@ def project(
         t_current=t_current,
     )
 
+    _add_cross_domain_connections(bound)
     return bound
+
+
+# ── Cross-domain connections ─────────────────────────────────────────
+
+# Causal relationships between top-level domain prefixes.
+# (src_prefix, dst_prefix) → weight.  These are directional.
+_CROSS_DOMAIN_PAIRS: list[tuple[str, str, float]] = [
+    # Regime conditions everything
+    ("regime",        "financial",    0.8),
+    ("regime",        "country",      0.8),
+    ("regime",        "sector",       0.6),
+    ("regime",        "firm",         0.5),
+    ("regime",        "forecasts",    0.7),
+    # Financial ↔ macro
+    ("financial",     "country",      0.7),
+    ("country",       "financial",    0.7),
+    # Financial → firms, sectors
+    ("financial",     "firm",         0.5),
+    ("financial",     "sector",       0.5),
+    ("financial",     "forecasts",    0.6),
+    # Country/macro → forecasts
+    ("country",       "forecasts",    0.5),
+    ("country",       "narratives",   0.4),
+    # Narratives ↔ financial
+    ("narratives",    "financial",    0.5),
+    ("financial",     "narratives",   0.4),
+    # Events → many
+    ("events",        "financial",    0.6),
+    ("events",        "narratives",   0.5),
+    ("events",        "firm",         0.4),
+    ("events",        "country",      0.3),
+    # Firms / sectors
+    ("firm",          "sector",       0.5),
+    ("sector",        "firm",         0.4),
+    ("firm",          "forecasts",    0.4),
+    # Interventions
+    ("interventions", "financial",    0.6),
+    ("interventions", "country",      0.7),
+    # Trust
+    ("trust",         "narratives",   0.4),
+    ("trust",         "events",       0.3),
+    # People
+    ("person",        "firm",         0.6),
+    ("person",        "narratives",   0.4),
+]
+
+
+def _domain_prefix(field_name: str) -> str:
+    """Map a field name to its domain prefix for cross-domain matching."""
+    top = field_name.split(".")[0]
+    for prefix in ("regime", "financial", "country", "sector", "firm",
+                    "person", "events", "narratives", "interventions",
+                    "trust", "forecasts", "technology", "resources",
+                    "physical", "sc"):
+        if top.startswith(prefix):
+            return prefix
+    return top
+
+
+def _add_cross_domain_connections(bound) -> None:
+    """Append cross-domain attention connections to a compiled BoundSchema.
+
+    compile_schema generates intra-domain connections only.  This function
+    adds directed hub connections between domains that have a causal
+    relationship (defined in _CROSS_DOMAIN_PAIRS), using representative
+    fields from each domain.
+    """
+    if bound.topology is None:
+        return
+
+    # Group fields by domain prefix
+    domain_fields: dict[str, list[str]] = defaultdict(list)
+    for name in bound.field_names:
+        domain_fields[_domain_prefix(name)].append(name)
+
+    present = set(domain_fields.keys())
+    new_conns: list[Connection] = []
+
+    for src_prefix, dst_prefix, weight in _CROSS_DOMAIN_PAIRS:
+        if src_prefix not in present or dst_prefix not in present:
+            continue
+
+        # Pick up to 3 representative fields from each domain
+        src_reps = domain_fields[src_prefix][:3]
+        dst_reps = domain_fields[dst_prefix][:3]
+
+        for sf in src_reps:
+            for df in dst_reps:
+                new_conns.append(Connection(src=sf, dst=df, weight=weight))
+
+    bound.topology.connections.extend(new_conns)
