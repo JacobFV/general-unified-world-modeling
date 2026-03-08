@@ -6,9 +6,9 @@ market data, sentiment, and risk scores.
 
 from dataclasses import dataclass, field as dc_field
 from canvas_engineering import Field
-from guwm.schema.macro import MacroEconomy
-from guwm.schema.political import PoliticalLayer
-from guwm.schema.demographics import DemographicLayer
+from general_unified_world_model.schema.macro import MacroEconomy
+from general_unified_world_model.schema.political import PoliticalLayer
+from general_unified_world_model.schema.demographics import DemographicLayer
 
 
 @dataclass

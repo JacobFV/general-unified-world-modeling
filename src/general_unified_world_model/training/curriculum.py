@@ -45,9 +45,9 @@ import torch.nn as nn
 
 from canvas_engineering import ConnectivityPolicy, compile_schema
 
-from guwm.projection.subset import WorldProjection, project
-from guwm.training.backbone import build_world_model, WorldModelBackbone
-from guwm.training.heterogeneous import (
+from general_unified_world_model.projection.subset import WorldProjection, project
+from general_unified_world_model.training.backbone import build_world_model, WorldModelBackbone
+from general_unified_world_model.training.heterogeneous import (
     FieldEncoder, FieldDecoder, MaskedCanvasTrainer,
     DatasetSpec, HeterogeneousDataset, build_mixed_dataloader,
 )

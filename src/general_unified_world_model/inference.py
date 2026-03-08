@@ -23,10 +23,10 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-from guwm.training.backbone import WorldModelBackbone, build_world_model
-from guwm.training.heterogeneous import FieldEncoder, FieldDecoder
-from guwm.training.diffusion import DiffusionWorldModelTrainer, CosineNoiseSchedule
-from guwm.projection.subset import WorldProjection, project
+from general_unified_world_model.training.backbone import WorldModelBackbone, build_world_model
+from general_unified_world_model.training.heterogeneous import FieldEncoder, FieldDecoder
+from general_unified_world_model.training.diffusion import DiffusionWorldModelTrainer, CosineNoiseSchedule
+from general_unified_world_model.projection.subset import WorldProjection, project
 
 
 class WorldModel:

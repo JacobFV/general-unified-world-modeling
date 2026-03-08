@@ -7,7 +7,7 @@ Run: python examples/01_quickstart.py
 """
 
 from canvas_engineering import compile_schema, ConnectivityPolicy
-from guwm.schema.world import World
+from general_unified_world_model.schema.world import World
 
 # Instantiate the full world model
 world = World()

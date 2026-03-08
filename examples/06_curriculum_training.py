@@ -11,11 +11,11 @@ Run: python examples/06_curriculum_training.py
 """
 
 import torch
-from guwm.training.curriculum import (
+from general_unified_world_model.training.curriculum import (
     CurriculumConfig, CurriculumTrainer, PhaseConfig,
     DomainSpec, STANDARD_DOMAINS,
 )
-from guwm.training.heterogeneous import DatasetSpec, FieldMapping
+from general_unified_world_model.training.heterogeneous import DatasetSpec, FieldMapping
 
 
 def generate_synthetic_sources():

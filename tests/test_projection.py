@@ -4,10 +4,10 @@ import pytest
 import torch
 from canvas_engineering import ConnectivityPolicy
 
-from guwm.projection.subset import WorldProjection, project
-from guwm.projection.temporal import TemporalTopology, TemporalEntity
-from guwm.schema.business import Business
-from guwm.schema.individual import Individual
+from general_unified_world_model.projection.subset import WorldProjection, project
+from general_unified_world_model.projection.temporal import TemporalTopology, TemporalEntity
+from general_unified_world_model.schema.business import Business
+from general_unified_world_model.schema.individual import Individual
 
 
 def test_full_projection():
@@ -113,7 +113,7 @@ def test_projection_forward_pass():
     proj = WorldProjection(include=["financial.yield_curves", "regime"])
     bound = project(proj, T=1, H=24, W=24, d_model=64)
 
-    from guwm.training.backbone import build_world_model
+    from general_unified_world_model.training.backbone import build_world_model
 
     backbone = build_world_model(bound, n_layers=2, n_loops=1)
     batch = torch.randn(2, bound.layout.num_positions, 64)

@@ -1,0 +1,26 @@
+"""Schema declarations for the General Unified World Model.
+
+The full ontology lives in submodules organized by domain layer.
+Import `World` for the top-level composition.
+"""
+
+from general_unified_world_model.schema.world import World
+from general_unified_world_model.schema.observability import ObservedFast, ObservedDaily, ObservedSlow
+from general_unified_world_model.schema.physical import PlanetaryPhysicalLayer
+from general_unified_world_model.schema.resources import ResourceLayer
+from general_unified_world_model.schema.financial import GlobalFinancialLayer
+from general_unified_world_model.schema.macro import MacroEconomy
+from general_unified_world_model.schema.political import PoliticalLayer
+from general_unified_world_model.schema.narrative import NarrativeBeliefLayer
+from general_unified_world_model.schema.technology import TechnologyLayer
+from general_unified_world_model.schema.demographics import DemographicLayer
+from general_unified_world_model.schema.sector import Sector
+from general_unified_world_model.schema.supply_chain import SupplyChainNode
+from general_unified_world_model.schema.business import Business
+from general_unified_world_model.schema.individual import Individual
+from general_unified_world_model.schema.events import EventTape
+from general_unified_world_model.schema.trust import DataChannelTrust
+from general_unified_world_model.schema.regime import RegimeState
+from general_unified_world_model.schema.intervention import InterventionSpace
+from general_unified_world_model.schema.forecast import ForecastBundle
+from general_unified_world_model.schema.country import Country

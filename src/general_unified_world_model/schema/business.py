@@ -6,7 +6,7 @@ Each firm also embeds a supply chain node for its position in the value chain.
 
 from dataclasses import dataclass, field as dc_field
 from canvas_engineering import Field
-from guwm.schema.supply_chain import SupplyChainNode
+from general_unified_world_model.schema.supply_chain import SupplyChainNode
 
 
 @dataclass

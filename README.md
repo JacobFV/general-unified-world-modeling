@@ -2,6 +2,8 @@
 
 ### A typed causal ontology of civilization, built on [canvas-engineering](https://github.com/JacobFV/canvas-engineering) structured latent spaces.
 
+[![PyPI](https://img.shields.io/pypi/v/general-unified-world-model.svg)](https://pypi.org/project/general-unified-world-model/)
+[![Tests](https://github.com/JacobFV/general-unified-world-modeling/actions/workflows/ci.yml/badge.svg)](https://github.com/JacobFV/general-unified-world-modeling/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-39%2F39-brightgreen.svg)]()
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
@@ -32,7 +34,7 @@ pip install general-unified-world-model
 
 ```python
 from canvas_engineering import compile_schema, ConnectivityPolicy
-from guwm import World
+from general_unified_world_model import World
 
 world = World()
 bound = compile_schema(
@@ -55,7 +57,7 @@ print(f"{len(bound.field_names)} fields, "
 You don't need the full 857-field model. Declare what you care about:
 
 ```python
-from guwm import WorldProjection, project
+from general_unified_world_model import WorldProjection, project
 
 # Hedge fund: macro + financial + two firms
 proj = WorldProjection(
@@ -76,7 +78,7 @@ bound = project(proj, T=1, H=64, W=64, d_model=64)
 ### Train on heterogeneous data
 
 ```python
-from guwm import (
+from general_unified_world_model import (
     WorldProjection, project, build_world_model,
     FieldEncoder, FieldDecoder, MaskedCanvasTrainer,
     DatasetSpec, FieldMapping, build_mixed_dataloader,
@@ -236,7 +238,7 @@ Both A and B train the **shared regime latent**, even though their field coverag
 Built-in adapters for common data sources:
 
 ```python
-from guwm.data.adapters import fred_adapter, yahoo_finance_adapter
+from general_unified_world_model.data.adapters import fred_adapter, yahoo_finance_adapter
 
 # FRED: 50+ macro series mapped to world model fields
 fred_spec, fred_data = fred_adapter(api_key="...", start_date="2010-01-01")
@@ -248,7 +250,7 @@ yahoo_spec, yahoo_data = yahoo_finance_adapter(
 )
 
 # Generic CSV/Parquet
-from guwm.data.adapters import tabular_adapter
+from general_unified_world_model.data.adapters import tabular_adapter
 spec, data = tabular_adapter(
     "My Dataset", "data.csv",
     column_mappings={"gdp_growth": "country_us.macro.output.gdp_nowcast"},
@@ -261,8 +263,8 @@ spec, data = tabular_adapter(
 Entities can appear and disappear over time:
 
 ```python
-from guwm import TemporalTopology
-from guwm.schema.business import Business
+from general_unified_world_model import TemporalTopology
+from general_unified_world_model.schema.business import Business
 
 tt = TemporalTopology()
 tt.add("firm_AAPL", Business(), start_tick=100)    # founded
@@ -278,7 +280,7 @@ mask = tt.generate_temporal_attention_mask((0, 1000), bound_schema)
 ## Inference
 
 ```python
-from guwm import WorldModel
+from general_unified_world_model import WorldModel
 
 model = WorldModel.load("checkpoint.pt", projection)
 
@@ -323,6 +325,72 @@ examples/
 ├── 04_computer_use_agent.py   # Agent: user psychology + world context
 ├── 05_train_financial.py      # Train on real FRED + Yahoo data
 └── 06_curriculum_training.py  # Full 3-phase curriculum training
+```
+
+## Development
+
+```bash
+git clone https://github.com/JacobFV/general-unified-world-modeling.git
+cd general-unified-world-modeling
+pip install -e ".[dev]"
+pytest
+```
+
+### Branch structure
+
+- `develop` — active development, PRs target here
+- `release` — stable releases, tagged commits trigger PyPI publish
+
+### Running tests
+
+```bash
+# Full suite (39 tests)
+pytest
+
+# With coverage
+pytest --cov=general_unified_world_model --cov-report=term-missing
+
+# Specific module
+pytest tests/test_schema.py -v
+```
+
+### Project layout
+
+```
+src/general_unified_world_model/
+├── schema/           # 19 schema modules (physical → forecast)
+│   ├── world.py      # Top-level World composition (857 fields)
+│   ├── physical.py   # Planetary physical substrate
+│   ├── resources.py  # Energy, metals, food, water, compute
+│   ├── financial.py  # Global monetary & financial
+│   ├── macro.py      # Macroeconomy (per country)
+│   ├── political.py  # Political & institutional
+│   ├── narrative.py  # Narrative, belief & expectations
+│   ├── technology.py # Technology & innovation
+│   ├── demographics.py
+│   ├── sector.py     # Per GICS sector
+│   ├── supply_chain.py
+│   ├── business.py   # Per firm (sparse)
+│   ├── individual.py # Key decision-makers (very sparse)
+│   ├── events.py     # Real-time event tape
+│   ├── trust.py      # Data channel trust (meta-epistemic)
+│   ├── regime.py     # Privileged regime latent
+│   ├── intervention.py
+│   ├── forecast.py   # Structured output heads
+│   ├── country.py    # Composite per country
+│   └── observability.py  # Reusable epistemic bundles
+├── projection/       # Subsetting & connectivity
+│   ├── subset.py     # WorldProjection, project()
+│   ├── temporal.py   # Temporal entity management
+│   └── transfer.py   # Semantic transfer distance
+├── training/         # Training infrastructure
+│   ├── backbone.py   # Transformer backbone
+│   ├── heterogeneous.py  # Masked canvas trainer
+│   ├── diffusion.py  # Diffusion objective
+│   └── curriculum.py # Multi-phase curriculum
+├── data/             # Data adapters
+│   └── adapters.py   # FRED, Yahoo, PMI, earnings, news, CSV
+└── inference.py      # Observe/predict API
 ```
 
 ## License

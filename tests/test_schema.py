@@ -4,26 +4,26 @@ import dataclasses
 import pytest
 from canvas_engineering import Field, compile_schema, ConnectivityPolicy
 
-from guwm.schema.world import World
-from guwm.schema.observability import ObservedFast, ObservedDaily, ObservedSlow
-from guwm.schema.physical import PlanetaryPhysicalLayer, ClimateState
-from guwm.schema.resources import ResourceLayer, EnergySystem
-from guwm.schema.financial import GlobalFinancialLayer, YieldCurveState
-from guwm.schema.macro import MacroEconomy, OutputAndGrowth
-from guwm.schema.political import PoliticalLayer
-from guwm.schema.narrative import NarrativeBeliefLayer
-from guwm.schema.technology import TechnologyLayer
-from guwm.schema.demographics import DemographicLayer
-from guwm.schema.sector import Sector
-from guwm.schema.supply_chain import SupplyChainNode
-from guwm.schema.business import Business
-from guwm.schema.individual import Individual
-from guwm.schema.events import EventTape
-from guwm.schema.trust import DataChannelTrust
-from guwm.schema.regime import RegimeState
-from guwm.schema.intervention import InterventionSpace
-from guwm.schema.forecast import ForecastBundle
-from guwm.schema.country import Country
+from general_unified_world_model.schema.world import World
+from general_unified_world_model.schema.observability import ObservedFast, ObservedDaily, ObservedSlow
+from general_unified_world_model.schema.physical import PlanetaryPhysicalLayer, ClimateState
+from general_unified_world_model.schema.resources import ResourceLayer, EnergySystem
+from general_unified_world_model.schema.financial import GlobalFinancialLayer, YieldCurveState
+from general_unified_world_model.schema.macro import MacroEconomy, OutputAndGrowth
+from general_unified_world_model.schema.political import PoliticalLayer
+from general_unified_world_model.schema.narrative import NarrativeBeliefLayer
+from general_unified_world_model.schema.technology import TechnologyLayer
+from general_unified_world_model.schema.demographics import DemographicLayer
+from general_unified_world_model.schema.sector import Sector
+from general_unified_world_model.schema.supply_chain import SupplyChainNode
+from general_unified_world_model.schema.business import Business
+from general_unified_world_model.schema.individual import Individual
+from general_unified_world_model.schema.events import EventTape
+from general_unified_world_model.schema.trust import DataChannelTrust
+from general_unified_world_model.schema.regime import RegimeState
+from general_unified_world_model.schema.intervention import InterventionSpace
+from general_unified_world_model.schema.forecast import ForecastBundle
+from general_unified_world_model.schema.country import Country
 
 
 def test_world_instantiation():

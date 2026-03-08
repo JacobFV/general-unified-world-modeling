@@ -8,7 +8,7 @@ Dense always-on:  physical, resources, financial, narratives,
 Sparse on-demand: countries, sectors, supply chains, firms, individuals
 
 Usage:
-    from guwm import World
+    from general_unified_world_model import World
     from canvas_engineering import compile_schema, ConnectivityPolicy
 
     world = World()
@@ -24,21 +24,21 @@ Usage:
 
 from dataclasses import dataclass, field as dc_field
 
-from guwm.schema.physical import PlanetaryPhysicalLayer
-from guwm.schema.resources import ResourceLayer
-from guwm.schema.financial import GlobalFinancialLayer
-from guwm.schema.narrative import NarrativeBeliefLayer
-from guwm.schema.technology import TechnologyLayer
-from guwm.schema.country import Country
-from guwm.schema.sector import Sector
-from guwm.schema.supply_chain import SupplyChainNode
-from guwm.schema.business import Business
-from guwm.schema.individual import Individual
-from guwm.schema.events import EventTape
-from guwm.schema.trust import DataChannelTrust
-from guwm.schema.regime import RegimeState
-from guwm.schema.intervention import InterventionSpace
-from guwm.schema.forecast import ForecastBundle
+from general_unified_world_model.schema.physical import PlanetaryPhysicalLayer
+from general_unified_world_model.schema.resources import ResourceLayer
+from general_unified_world_model.schema.financial import GlobalFinancialLayer
+from general_unified_world_model.schema.narrative import NarrativeBeliefLayer
+from general_unified_world_model.schema.technology import TechnologyLayer
+from general_unified_world_model.schema.country import Country
+from general_unified_world_model.schema.sector import Sector
+from general_unified_world_model.schema.supply_chain import SupplyChainNode
+from general_unified_world_model.schema.business import Business
+from general_unified_world_model.schema.individual import Individual
+from general_unified_world_model.schema.events import EventTape
+from general_unified_world_model.schema.trust import DataChannelTrust
+from general_unified_world_model.schema.regime import RegimeState
+from general_unified_world_model.schema.intervention import InterventionSpace
+from general_unified_world_model.schema.forecast import ForecastBundle
 
 
 @dataclass

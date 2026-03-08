@@ -6,7 +6,7 @@ Instantiated per country in the Country composite type.
 
 from dataclasses import dataclass, field as dc_field
 from canvas_engineering import Field
-from guwm.schema.observability import ObservedSlow
+from general_unified_world_model.schema.observability import ObservedSlow
 
 
 @dataclass

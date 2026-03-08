@@ -9,7 +9,7 @@ a particular connectivity topology — and compile it to a canvas. The full
 ontology is always available; the projection selects what's active.
 
 Usage:
-    from guwm import World, WorldProjection, project
+    from general_unified_world_model import World, WorldProjection, project
 
     # A hedge fund modeling macro + financial + 2 firms
     proj = WorldProjection(
@@ -39,12 +39,12 @@ from typing import Optional, Union
 
 from canvas_engineering import Field, ConnectivityPolicy, compile_schema
 
-from guwm.schema.world import World
-from guwm.schema.business import Business
-from guwm.schema.individual import Individual
-from guwm.schema.sector import Sector
-from guwm.schema.supply_chain import SupplyChainNode
-from guwm.schema.country import Country
+from general_unified_world_model.schema.world import World
+from general_unified_world_model.schema.business import Business
+from general_unified_world_model.schema.individual import Individual
+from general_unified_world_model.schema.sector import Sector
+from general_unified_world_model.schema.supply_chain import SupplyChainNode
+from general_unified_world_model.schema.country import Country
 
 
 # ── Projection container ────────────────────────────────────────────────

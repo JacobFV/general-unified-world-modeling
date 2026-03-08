@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "general-unified-world-model"
-version = "0.1.0"
+version = "0.0.1"
 description = "General Unified World Model — a typed causal ontology of civilization, built on canvas-engineering structured latent spaces."
 readme = "README.md"
 license = {text = "Apache-2.0"}

@@ -4,7 +4,7 @@ import pytest
 import torch
 from canvas_engineering import ConnectivityPolicy
 
-from guwm.projection.subset import WorldProjection, project
+from general_unified_world_model.projection.subset import WorldProjection, project
 
 
 @pytest.fixture

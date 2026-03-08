@@ -9,7 +9,7 @@ Run: python examples/03_government_policy.py
 """
 
 from canvas_engineering import ConnectivityPolicy
-from guwm.projection.subset import WorldProjection, project
+from general_unified_world_model.projection.subset import WorldProjection, project
 
 # Government analyst's specification
 proj = WorldProjection(

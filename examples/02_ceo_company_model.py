@@ -10,7 +10,7 @@ Run: python examples/02_ceo_company_model.py
 """
 
 from canvas_engineering import ConnectivityPolicy
-from guwm.projection.subset import WorldProjection, project
+from general_unified_world_model.projection.subset import WorldProjection, project
 
 # CEO's specification: "Model our company in context"
 proj = WorldProjection(

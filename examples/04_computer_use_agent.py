@@ -10,7 +10,7 @@ Run: python examples/04_computer_use_agent.py
 """
 
 from canvas_engineering import ConnectivityPolicy
-from guwm.projection.subset import WorldProjection, project
+from general_unified_world_model.projection.subset import WorldProjection, project
 
 # Computer use agent's world model
 proj = WorldProjection(

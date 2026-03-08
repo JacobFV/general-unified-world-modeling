@@ -18,7 +18,7 @@ from typing import Optional
 import numpy as np
 import torch
 
-from guwm.training.heterogeneous import DatasetSpec, FieldMapping
+from general_unified_world_model.training.heterogeneous import DatasetSpec, FieldMapping
 
 
 # ── Normalization functions ──────────────────────────────────────────────

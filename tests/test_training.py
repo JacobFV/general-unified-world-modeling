@@ -4,14 +4,14 @@ import pytest
 import torch
 import torch.nn as nn
 
-from guwm.projection.subset import WorldProjection, project
-from guwm.training.backbone import WorldModelBackbone, build_world_model
-from guwm.training.heterogeneous import (
+from general_unified_world_model.projection.subset import WorldProjection, project
+from general_unified_world_model.training.backbone import WorldModelBackbone, build_world_model
+from general_unified_world_model.training.heterogeneous import (
     FieldEncoder, FieldDecoder, MaskedCanvasTrainer,
     DatasetSpec, FieldMapping, HeterogeneousDataset,
     build_mixed_dataloader,
 )
-from guwm.training.diffusion import (
+from general_unified_world_model.training.diffusion import (
     CosineNoiseSchedule, MultiFrequencyNoise, DiffusionWorldModelTrainer,
 )
 

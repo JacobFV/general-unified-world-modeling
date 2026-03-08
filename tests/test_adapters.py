@@ -3,11 +3,11 @@
 import pytest
 import torch
 
-from guwm.data.adapters import (
+from general_unified_world_model.data.adapters import (
     z_score, minmax, log_return, pct_change, rank_normalize,
     pmi_adapter, earnings_adapter, news_adapter,
 )
-from guwm.training.heterogeneous import DatasetSpec, FieldMapping
+from general_unified_world_model.training.heterogeneous import DatasetSpec, FieldMapping
 
 
 def test_z_score_transform():

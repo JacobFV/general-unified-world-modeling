@@ -16,13 +16,13 @@ import os
 import torch
 from canvas_engineering import ConnectivityPolicy
 
-from guwm.projection.subset import WorldProjection, project
-from guwm.training.backbone import build_world_model
-from guwm.training.heterogeneous import (
+from general_unified_world_model.projection.subset import WorldProjection, project
+from general_unified_world_model.training.backbone import build_world_model
+from general_unified_world_model.training.heterogeneous import (
     FieldEncoder, FieldDecoder, MaskedCanvasTrainer,
     build_mixed_dataloader,
 )
-from guwm.data.adapters import fred_adapter, yahoo_finance_adapter
+from general_unified_world_model.data.adapters import fred_adapter, yahoo_finance_adapter
 
 
 def main():
@@ -120,7 +120,7 @@ def main():
 
 def _synthetic_macro_source(bound):
     """Generate synthetic macro data for testing."""
-    from guwm.training.heterogeneous import DatasetSpec, FieldMapping
+    from general_unified_world_model.training.heterogeneous import DatasetSpec, FieldMapping
 
     n_rows = 1000
     data = {}
@@ -142,7 +142,7 @@ def _synthetic_macro_source(bound):
 
 def _synthetic_market_source(bound):
     """Generate synthetic market data for testing."""
-    from guwm.training.heterogeneous import DatasetSpec, FieldMapping
+    from general_unified_world_model.training.heterogeneous import DatasetSpec, FieldMapping
 
     n_rows = 1000
     data = {}
