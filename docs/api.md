@@ -23,6 +23,8 @@ bound = compile_schema(
 )
 ```
 
+See [Schema Reference](schema.md) for a full breakdown of all 19 layers and 857 fields.
+
 ---
 
 ## Projection
@@ -64,7 +66,7 @@ Compiles a `WorldProjection` into a `BoundSchema`.
 ```python
 from general_unified_world_model import project
 
-bound = project(proj, T=1, H=64, W=64, d_model=64)
+bound = project(proj, T=1, d_model=64)  # H, W auto-sized
 ```
 
 **Parameters:**
@@ -73,8 +75,8 @@ bound = project(proj, T=1, H=64, W=64, d_model=64)
 |-----------|------|-------------|
 | `projection` | `WorldProjection` | The projection to compile |
 | `T` | `int` | Temporal dimension (typically 1) |
-| `H` | `int` | Canvas height |
-| `W` | `int` | Canvas width |
+| `H` | `int \| None` | Canvas height (None = auto-size) |
+| `W` | `int \| None` | Canvas width (None = auto-size) |
 | `d_model` | `int` | Latent dimension per position |
 | `connectivity` | `ConnectivityPolicy` | Optional connectivity override |
 
@@ -127,13 +129,32 @@ Clear all observations.
 
 ### `build_world_model(bound, n_layers, n_heads, d_ff, n_loops)`
 
-Build a `WorldModelBackbone` transformer for a given `BoundSchema`.
+Build a `WorldModelBackbone` transformer from scratch for a given `BoundSchema`.
 
 ```python
 from general_unified_world_model import build_world_model
 
 backbone = build_world_model(bound, n_layers=8, n_heads=4, d_ff=256, n_loops=3)
 ```
+
+### `CogVideoXBackbone` / `build_cogvideox_world_model()`
+
+CogVideoX-grafted backbone. Loads a pretrained CogVideoX transformer, freezes its blocks, and adds per-block loop embeddings + projection layers as the only trainable parameters (~0.1% of total).
+
+```python
+from general_unified_world_model.training.backbone import (
+    CogVideoXBackbone,
+    build_cogvideox_world_model,
+)
+
+backbone = build_cogvideox_world_model(
+    transformer=cogvideox_transformer,
+    bound_schema=bound,
+    n_loops=3,
+)
+```
+
+See [CogVideoX Backbone](cogvideox.md) for architecture details.
 
 ### `FieldEncoder` / `FieldDecoder`
 
@@ -146,21 +167,59 @@ encoder = FieldEncoder(bound)
 decoder = FieldDecoder(bound)
 ```
 
-### `DatasetSpec` / `FieldMapping`
+### `DatasetSpec` / `InputSpec` / `OutputSpec`
 
-Declare how a data source maps to schema fields.
+Declare how a data source maps to schema fields. `InputSpec` defines input modalities, `OutputSpec` defines output modalities with loss configuration.
 
 ```python
-from general_unified_world_model import DatasetSpec, FieldMapping
+from general_unified_world_model import DatasetSpec, InputSpec, OutputSpec
 
 spec = DatasetSpec(
     name="FRED",
-    mappings=[
-        FieldMapping("gdp", "country_us.macro.output.gdp_nowcast"),
-        FieldMapping("cpi", "country_us.macro.inflation.headline_cpi"),
+    input_specs=[
+        InputSpec(
+            key="gdp",
+            semantic_type="US real GDP quarterly growth rate",
+            field_path="country_us.macro.output.gdp_nowcast",
+        ),
+    ],
+    output_specs=[
+        OutputSpec(
+            key="gdp",
+            semantic_type="US real GDP quarterly growth rate",
+            field_path="country_us.macro.output.gdp_nowcast",
+            loss_weight=2.0,
+        ),
     ],
 )
 ```
+
+**InputSpec parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `key` | `str` | Column/key name in the raw data |
+| `semantic_type` | `str` | Natural language description for conditioning |
+| `field_path` | `str` | Dotted path in the world schema |
+| `dtype` | `str` | Data type hint (default `"float32"`) |
+| `encoder` | `Any` | Custom encoder module (optional) |
+| `region_size` | `int \| None` | Override canvas region size |
+| `transform` | `Callable` | Pre-processing transform (optional) |
+| `frequency` | `int \| None` | Update frequency (None = every tick) |
+
+**OutputSpec parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `key` | `str` | Column/key name for ground truth |
+| `semantic_type` | `str` | Natural language description |
+| `field_path` | `str` | Dotted path in the world schema |
+| `dtype` | `str` | Data type hint (default `"float32"`) |
+| `decoder` | `Any` | Custom decoder module (optional) |
+| `loss_fn` | `str \| Callable` | Loss function (default `"mse"`) |
+| `loss_weight` | `float` | Relative loss weight (default `1.0`) |
+| `transform` | `Callable` | Inverse transform on predictions (optional) |
+| `frequency` | `int \| None` | Update frequency |
 
 ### `build_mixed_dataloader(bound, sources, batch_size)`
 
@@ -193,13 +252,40 @@ trainer = MaskedCanvasTrainer(
 trainer.train(dataloader, n_steps=10000)
 ```
 
+### `DAGCurriculumTrainer`
+
+Fork-join DAG curriculum with weight merging. Supports both CogVideoX and scratch backbones.
+
+```python
+from general_unified_world_model import DAGCurriculumTrainer
+
+trainer = DAGCurriculumTrainer(
+    nodes=dag,
+    data_sources=data_sources,
+    backbone="cogvideox",                      # or "scratch"
+    pretrained_model_id="THUDM/CogVideoX-2b",  # for cogvideox
+    device="cuda",
+)
+trainer.run()
+```
+
+### `build_curriculum()` / `DatasetProfile`
+
+LLM-driven curriculum design. Examines datasets and generates an optimal training schedule.
+
+```python
+from general_unified_world_model import build_curriculum, DatasetProfile
+
+curriculum = build_curriculum(
+    goal="Learn financial risk dynamics",
+    datasets=[DatasetProfile(name="FRED", ...)],
+)
+nodes = curriculum.to_training_nodes()
+```
+
 ### `CurriculumTrainer` / `CurriculumConfig`
 
 Sequential multi-phase curriculum training.
-
-### `DAGCurriculumTrainer` / `TrainingNode`
-
-Fork-join DAG curriculum with weight merging. See [Training](training.md).
 
 ---
 
@@ -254,7 +340,7 @@ result = llm_project(
     "Hedge fund PM modeling US macro, rates, credit, Apple and NVIDIA",
     provider="anthropic",
 )
-bound = result.compile(T=1, H=64, W=64, d_model=64)
+bound = result.compile(T=1, d_model=64)
 ```
 
 **Returns:** object with `.projection`, `.reasoning`, `.compile()` method.

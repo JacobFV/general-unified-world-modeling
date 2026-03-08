@@ -27,6 +27,7 @@ theme:
     - navigation.sections
     - navigation.expand
     - navigation.top
+    - navigation.tabs
     - toc.follow
   icon:
     repo: fontawesome/brands/github
@@ -34,7 +35,11 @@ theme:
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
   - admonition
@@ -44,14 +49,23 @@ markdown_extensions:
   - tables
   - toc:
       permalink: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
 
 plugins:
   - search
 
 nav:
   - Home: index.md
-  - Architecture: architecture.md
-  - Training: training.md
+  - Getting Started:
+    - Architecture: architecture.md
+    - Schema Reference: schema.md
+    - Use Cases: use_cases.md
+  - Training:
+    - Training Pipeline: training.md
+    - CogVideoX Backbone: cogvideox.md
+    - DAG Curriculum: dag_curriculum.md
+    - Datasets: datasets.md
   - API Reference: api.md
   - Examples: examples.md
-  - Training Curriculum (Research): training_curriculum.md

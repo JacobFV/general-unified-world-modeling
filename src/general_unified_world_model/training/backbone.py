@@ -278,6 +278,19 @@ class CogVideoXBackbone(nn.Module):
 
         Returns:
             (B, N, d_model) output tensor.
+
+        Note:
+            CogVideoX blocks use full attention; the canvas topology mask is
+            NOT applied. The topology is encoded implicitly via positional
+            encoding and the training dynamics.
+
+            TODO: To support per-connection attention dispatch (Connection.fn /
+            RegionSpec.default_attn from canvas-engineering), the forward pass
+            should iterate over topology.attention_ops() and call resolved
+            attention functions per (src, dst) pair instead of running all
+            positions through the same block. This would enable heterogeneous
+            attention types (e.g. linear attention for fast-frequency fields,
+            full attention for cross-domain connections).
         """
         B, N, _ = x.shape
 
