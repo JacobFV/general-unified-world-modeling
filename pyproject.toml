@@ -22,7 +22,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "canvas-engineering>=0.1.3",
+    "canvas-engineering>=0.1.4",
     "torch>=2.0",
     "numpy>=1.24",
     "pandas>=2.0",

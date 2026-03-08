@@ -1,4 +1,4 @@
-"""WorldProjection: declare which parts of the world model you need.
+"""WorldProjection: declare which parts of a schema you need.
 
 You explicitly list every node you want to model. Only listed paths
 (and structural ancestors needed to reach them) are included. Non-listed
@@ -9,21 +9,21 @@ type automatically gets a coarse-grained field at its path, providing
 hierarchical bottlenecking for cross-level attention.
 
 Usage:
-    from general_unified_world_model import World, WorldProjection, project
-    from general_unified_world_model.schema.business import Business
+    from general_unified_world_model import World, project
 
-    proj = WorldProjection(
-        include=[
-            "financial",              # all of financial, fully expanded
-            "country_us.macro",       # only macro — politics/demographics omitted
-            "regime",
-        ],
-        entities={
-            "firm_AAPL": Business(),
-            "firm_NVDA": Business(),
-        },
+    # Clean API: schema root + include
+    bound = project(World(), include=["financial", "regime"])
+
+    # Or with entities
+    from general_unified_world_model.schema.business import Business
+    bound = project(
+        World(),
+        include=["financial", "country_us.macro", "regime"],
+        entities={"firm_AAPL": Business(), "firm_NVDA": Business()},
     )
 
+    # Legacy API still works
+    proj = WorldProjection(include=["financial"], entities={...})
     bound = project(proj, T=1, d_model=64)
 """
 
@@ -37,27 +37,6 @@ from typing import Any, Optional
 from canvas_engineering import ConnectivityPolicy, compile_schema
 
 from general_unified_world_model.schema.world import World
-
-
-# ── Projection container ────────────────────────────────────────────────
-# compile_schema traverses dataclass fields and lists. To add dynamic
-# entities (firms, individuals, etc.) we use a container dataclass
-# with list fields that hold the dynamic instances.
-
-@dataclass
-class ProjectedWorld:
-    """A World subset with dynamic entity lists.
-
-    compile_schema traverses:
-      - dataclass fields → named regions
-      - list fields → array elements with [i] indexing
-
-    This container exposes the same top-level layers as World,
-    plus lists for dynamic entities.
-    """
-    # These will be selectively populated from World
-    # Using Optional so they can be None (excluded from compilation)
-    pass
 
 
 # ── Projection helpers ─────────────────────────────────────────────────
@@ -85,27 +64,27 @@ def _any_path_matches(field_path: str, patterns: list[str]) -> bool:
 # ── Projection logic ──────────────────────────────────────────────────
 
 def _make_projected_dataclass(
-    world: World,
+    root,
     include_paths: list[str],
     exclude_paths: list[str],
     entities: dict[str, Any],
 ):
-    """Dynamically construct a projected dataclass from the World.
+    """Dynamically construct a projected dataclass from any schema root.
 
     Since compile_schema only walks dataclass fields, we build a new
     dataclass at runtime with exactly the fields we need.
 
     Each include path is resolved independently:
     - "financial" → include the full GlobalFinancialLayer
-    - "country_us.macro" → navigate to world.country_us.macro,
+    - "country_us.macro" → navigate to root.country_us.macro,
       include it as a top-level field named "country_us.macro"
 
     No implicit parent inclusion. If you want country_us as a
     structural wrapper, include "country_us" explicitly.
 
     Args:
-        world: The full World instance to project from.
-        include_paths: Dotted paths into World to include. ["*"] means all.
+        root: Any dataclass instance to project from.
+        include_paths: Dotted paths into root to include. ["*"] means all.
         exclude_paths: Dotted paths to exclude (applied after include).
         entities: Dict mapping entity names (e.g. "firm_AAPL") to
             dataclass instances. Added as named fields on the projection.
@@ -115,36 +94,29 @@ def _make_projected_dataclass(
     is_wildcard = include_paths == ["*"]
 
     if is_wildcard:
-        # Include everything
-        for f in dataclasses.fields(World):
-            val = getattr(world, f.name)
-            if not _any_path_matches(f.name, exclude_paths):
-                fields_dict[f.name] = val
+        if dataclasses.is_dataclass(root):
+            for f in dataclasses.fields(root):
+                val = getattr(root, f.name)
+                if not _any_path_matches(f.name, exclude_paths):
+                    fields_dict[f.name] = val
+        else:
+            raise ValueError("Wildcard include requires a dataclass root")
     else:
-        # Resolve each include path independently
         for path in include_paths:
             if _any_path_matches(path, exclude_paths):
                 continue
-            # Navigate the dotted path from world
-            obj = _resolve_path(world, path)
+            obj = _resolve_path(root, path)
             if obj is not None:
-                # Use a safe field name (dots → underscores for dataclass)
                 fields_dict[path] = obj
 
-    # Add dynamic entities as named fields
     for name, obj in entities.items():
         fields_dict[name] = obj
 
     if not fields_dict:
         raise ValueError("Projection resulted in zero fields. Check your include paths.")
 
-    # Build a dynamic dataclass.
-    # Dotted paths need sanitized field names for Python identifiers,
-    # but compile_schema uses the field name as path prefix. We use
-    # dots→double-underscores so "country_us.macro" becomes
-    # "country_us__macro" and compile_schema produces paths like
-    # "country_us__macro.gdp". The HeterogeneousDataset handles
-    # both naming conventions when routing data.
+    # Build a dynamic dataclass. Dotted paths need sanitized field names
+    # for Python identifiers. "country_us.macro" becomes "country_us__macro".
     dc_fields = []
     for path, val in fields_dict.items():
         safe_name = path.replace(".", "__")
@@ -160,17 +132,16 @@ def _make_projected_dataclass(
 
 @dataclass
 class WorldProjection:
-    """Declares which subset of the World schema to activate.
+    """Declares which subset of a schema to activate.
 
     Only explicitly listed paths are included. Non-listed siblings are
     omitted entirely. compile_schema handles structural coarse-graining
     (every nested type gets a coarse-grained field automatically).
 
     Args:
-        include: List of dotted paths into the World schema to include.
+        include: List of dotted paths into the schema to include.
             E.g. ["financial", "country_us.macro", "regime"].
-            Use "*" to include everything.
-            Sub-paths keep only the listed children; siblings are dropped.
+            Use ["*"] to include everything.
 
         exclude: List of dotted paths to exclude (applied after include).
 
@@ -195,47 +166,82 @@ class WorldProjection:
 
 
 def project(
-    proj: WorldProjection,
+    proj_or_root=None,
+    /,
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
+    entities: dict[str, Any] | None = None,
     T: int = 1,
-    H: Optional[int] = None,
-    W: Optional[int] = None,
+    H: int | None = None,
+    W: int | None = None,
     d_model: int = 64,
-    connectivity: Optional[ConnectivityPolicy] = None,
+    connectivity: ConnectivityPolicy | None = None,
     t_current: int = 0,
-):
-    """Compile a WorldProjection into a BoundSchema.
+) -> "BoundSchema":
+    """Compile a schema projection into a BoundSchema.
 
-    This is the main entry point. Declare what you care about,
-    get a compiled canvas ready for training.
+    Accepts either a WorldProjection (legacy) or a schema root directly.
 
-    Canvas dimensions (H, W) are auto-computed by compile_schema when
-    not specified — like a C compiler allocating struct memory.
+    Usage:
+        # Clean API: schema root + include/exclude
+        bound = project(World(), include=["financial", "regime"])
 
-    Only explicitly included paths are modeled. Non-included siblings
-    are omitted, not coarse-grained. compile_schema handles structural
-    coarse-graining: every nested type gets a coarse-grained field at
-    its path, routing cross-level attention through it.
+        # With entities
+        bound = project(World(),
+            include=["financial", "country_us.macro"],
+            entities={"firm_AAPL": Business()},
+        )
+
+        # Auto-sized (H, W computed from field count)
+        bound = project(World(), include=["regime"], d_model=64)
+
+        # Legacy API: WorldProjection
+        proj = WorldProjection(include=["financial"])
+        bound = project(proj, T=1, d_model=64)
 
     Args:
-        proj: WorldProjection declaring the subset.
+        proj_or_root: A WorldProjection, a schema root (dataclass), or None.
+            - WorldProjection: use directly (legacy API)
+            - Dataclass: use as schema root with include/exclude/entities
+            - None: defaults to World()
+        include: Dotted paths to include. Default ["*"] (all).
+        exclude: Dotted paths to exclude.
+        entities: Dict of entity_name -> dataclass instance.
         T: Temporal extent.
-        H, W: Canvas grid dimensions. None = auto-sized by compile_schema.
+        H, W: Canvas grid dimensions. None = auto-sized.
         d_model: Latent dimensionality per position.
         connectivity: Override connectivity policy.
         t_current: Timestep boundary for output mask.
 
     Returns:
         BoundSchema with layout, topology, and field accessors.
-
-    Example:
-        proj = WorldProjection(include=["financial", "regime", "forecasts"])
-        bound = project(proj)  # auto-sized canvas
-        print(bound.summary())
     """
-    world = World()
+    # Determine root and projection
+    if isinstance(proj_or_root, WorldProjection):
+        # Legacy API: project(WorldProjection(...), T=1)
+        proj = proj_or_root
+        root = World()
+    elif proj_or_root is not None and dataclasses.is_dataclass(proj_or_root):
+        # New API: project(World(), include=[...])
+        root = proj_or_root
+        proj = WorldProjection(
+            include=include or ["*"],
+            exclude=exclude or [],
+            entities=entities or {},
+            connectivity=connectivity,
+        )
+    else:
+        # Default: project(include=[...]) uses World()
+        root = World()
+        proj = WorldProjection(
+            include=include or ["*"],
+            exclude=exclude or [],
+            entities=entities or {},
+            connectivity=connectivity,
+        )
 
     projected = _make_projected_dataclass(
-        world, proj.include, proj.exclude,
+        root, proj.include, proj.exclude,
         proj.entities,
     )
 

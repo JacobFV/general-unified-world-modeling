@@ -3,14 +3,15 @@
 Built on canvas-engineering: prompt engineering for latent space.
 
 Quick start:
-    from general_unified_world_model import World, WorldProjection, project
+    from general_unified_world_model import World, project, GeneralUnifiedWorldModel
 
-    # Full world model (857 fields, 19 layers)
-    world = World()
+    # Clean API: schema root + include
+    bound = project(World(), include=["financial", "regime", "forecasts"])
 
-    # Or project to a subset
-    proj = WorldProjection(include=["financial", "regime", "forecasts"])
-    bound = project(proj, T=1, H=64, W=64, d_model=64)
+    # Or use the convenience class directly
+    model = GeneralUnifiedWorldModel(include=["financial", "regime"])
+    model.observe("financial.yield_curves.ten_year", 4.25)
+    predictions = model.predict()
 """
 
 __version__ = "0.0.3"
@@ -48,7 +49,7 @@ from general_unified_world_model.training.dag_curriculum import (
 )
 
 # Inference
-from general_unified_world_model.inference import WorldModel
+from general_unified_world_model.inference import WorldModel, GeneralUnifiedWorldModel
 
 # Rendering (lazy — only loaded when accessed, needs matplotlib)
 def render(bound_schema, renderer, **kwargs):
