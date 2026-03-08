@@ -6,46 +6,49 @@ Cognitive style, incentives, network position, current state.
 
 from dataclasses import dataclass, field as dc_field
 from canvas_engineering import Field
+from general_unified_world_model.schema.temporal_constants import (
+    DAILY, WEEKLY, MONTHLY, QUARTERLY, ANNUAL,
+)
 
 
 @dataclass
 class PersonCognitive:
-    decision_style:             Field = Field(1, 4, period=576)
-    risk_appetite:              Field = Field(1, 2, period=192)
-    time_horizon:               Field = Field(1, 2, period=576)
-    belief_update_speed:        Field = Field(1, 2, period=192)
-    cognitive_load:             Field = Field(1, 2, period=48)
-    ideological_priors:         Field = Field(1, 4, period=2304)
+    decision_style:             Field = Field(1, 4, period=QUARTERLY)
+    risk_appetite:              Field = Field(1, 2, period=MONTHLY)
+    time_horizon:               Field = Field(1, 2, period=QUARTERLY)
+    belief_update_speed:        Field = Field(1, 2, period=MONTHLY)
+    cognitive_load:             Field = Field(1, 2, period=WEEKLY)
+    ideological_priors:         Field = Field(1, 4, period=ANNUAL)
 
 
 @dataclass
 class PersonIncentives:
-    compensation_structure:     Field = Field(1, 4, period=576, is_output=False)
-    career_incentives:          Field = Field(1, 2, period=576)
-    reputation_concerns:        Field = Field(1, 2, period=192)
-    legal_exposure:             Field = Field(1, 2, period=192)
-    legacy_concerns:            Field = Field(1, 2, period=576)
-    peer_pressure:              Field = Field(1, 2, period=192)
+    compensation_structure:     Field = Field(1, 4, period=QUARTERLY, is_output=False)
+    career_incentives:          Field = Field(1, 2, period=QUARTERLY)
+    reputation_concerns:        Field = Field(1, 2, period=MONTHLY)
+    legal_exposure:             Field = Field(1, 2, period=MONTHLY)
+    legacy_concerns:            Field = Field(1, 2, period=QUARTERLY)
+    peer_pressure:              Field = Field(1, 2, period=MONTHLY)
 
 
 @dataclass
 class PersonNetwork:
-    formal_authority:           Field = Field(1, 4, period=576)
-    network_centrality:         Field = Field(1, 2, period=576)
-    trusted_advisors:           Field = Field(1, 4, period=576)
-    board_relationships:        Field = Field(1, 4, period=576)
-    political_connections:      Field = Field(1, 2, period=576)
-    media_influence:            Field = Field(1, 2, period=192)
+    formal_authority:           Field = Field(1, 4, period=QUARTERLY)
+    network_centrality:         Field = Field(1, 2, period=QUARTERLY)
+    trusted_advisors:           Field = Field(1, 4, period=QUARTERLY)
+    board_relationships:        Field = Field(1, 4, period=QUARTERLY)
+    political_connections:      Field = Field(1, 2, period=QUARTERLY)
+    media_influence:            Field = Field(1, 2, period=MONTHLY)
 
 
 @dataclass
 class PersonState:
-    stress:                     Field = Field(1, 2, period=48)
-    health_energy:              Field = Field(1, 2, period=192)
-    confidence:                 Field = Field(1, 2, period=48)
-    current_focus:              Field = Field(1, 4, period=48)
-    public_statements_tone:     Field = Field(1, 2, period=16)
-    private_info_proxy:         Field = Field(1, 4, period=48, loss_weight=3.0)
+    stress:                     Field = Field(1, 2, period=WEEKLY)
+    health_energy:              Field = Field(1, 2, period=MONTHLY)
+    confidence:                 Field = Field(1, 2, period=WEEKLY)
+    current_focus:              Field = Field(1, 4, period=WEEKLY)
+    public_statements_tone:     Field = Field(1, 2, period=DAILY)
+    private_info_proxy:         Field = Field(1, 4, period=WEEKLY, loss_weight=3.0)
 
 
 @dataclass

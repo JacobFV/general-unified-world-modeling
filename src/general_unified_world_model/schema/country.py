@@ -9,6 +9,9 @@ from canvas_engineering import Field
 from general_unified_world_model.schema.macro import MacroEconomy
 from general_unified_world_model.schema.political import PoliticalLayer
 from general_unified_world_model.schema.demographics import DemographicLayer
+from general_unified_world_model.schema.temporal_constants import (
+    TICK, WEEKLY, MONTHLY,
+)
 
 
 @dataclass
@@ -17,12 +20,12 @@ class Country:
     politics:       PoliticalLayer   = dc_field(default_factory=PoliticalLayer)
     demographics:   DemographicLayer = dc_field(default_factory=DemographicLayer)
 
-    domestic_sentiment:         Field = Field(1, 4, period=192)
-    domestic_media_tone:        Field = Field(1, 2, period=48)
-    sovereign_yield_curve:      Field = Field(1, 4, period=1)
-    sovereign_cds:              Field = Field(1, 2, period=1)
-    local_equity_index:         Field = Field(1, 2, period=1)
-    banking_system_health:      Field = Field(1, 4, period=192)
+    domestic_sentiment:         Field = Field(1, 4, period=MONTHLY)
+    domestic_media_tone:        Field = Field(1, 2, period=WEEKLY)
+    sovereign_yield_curve:      Field = Field(1, 4, period=TICK)
+    sovereign_cds:              Field = Field(1, 2, period=TICK)
+    local_equity_index:         Field = Field(1, 2, period=TICK)
+    banking_system_health:      Field = Field(1, 4, period=MONTHLY)
 
     identity:                   Field = Field(2, 4, is_output=False)
     trade_partners:             Field = Field(2, 4, is_output=False)

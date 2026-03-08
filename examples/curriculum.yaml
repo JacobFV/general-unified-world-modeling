@@ -1,0 +1,102 @@
+# General Unified World Model — Training Curriculum
+#
+# This YAML file specifies the full training DAG as a sequence of stages.
+# Each stage forks into parallel subjects (trained simultaneously),
+# then joins (weight averaging) before the next stage.
+#
+# Subjects are specified in natural language. The system resolves
+# them to world model field paths via keyword matching. You can also
+# provide explicit `include` paths to override the NL resolution.
+#
+# Usage:
+#   from general_unified_world_model.training.dag_curriculum import (
+#       CurriculumSpec, DAGCurriculumTrainer,
+#   )
+#   spec = CurriculumSpec.from_yaml("examples/curriculum.yaml")
+#   nodes = spec.to_training_nodes()
+#   trainer = DAGCurriculumTrainer(nodes=nodes, ...)
+#   trainer.run()
+
+name: general_unified_world_model_v1
+
+defaults:
+  H: 48
+  W: 48
+  d_model: 64
+  n_layers: 6
+  n_loops: 3
+  n_steps: 5000
+  lr: 0.0001
+  batch_size: 32
+
+stages:
+  # ── Stage 1: Foundations ──────────────────────────────────────────
+  # Six parallel foundation models, each learning one domain.
+  # No parent weights — these start from random initialization.
+  - name: foundations
+    parallel:
+      - subject: "Core financial markets: yield curves, credit spreads, equity indices, FX, derivatives pricing"
+        datasets: [yahoo_finance, fred_rates]
+
+      - subject: "US macroeconomic fundamentals: GDP, inflation, employment, housing, fiscal policy"
+        datasets: [fred_macro]
+
+      - subject: "Political systems, governance, and geopolitical dynamics"
+
+      - subject: "Natural resources, energy markets, and commodity supply chains"
+        datasets: [yahoo_commodities]
+
+      - subject: "Technology frontier: AI capabilities, semiconductor production, biotech advances"
+
+      - subject: "Media narratives, investor positioning, and public sentiment"
+        datasets: [news_embeddings]
+
+  # ── Stage 2: Cross-Domain ────────────────────────────────────────
+  # Three parallel models that combine foundation domains.
+  # Each starts from the merged weights of all foundation models.
+  - name: cross_domain
+    builds_on: foundations
+    parallel:
+      - subject: "How macroeconomic conditions drive financial markets: GDP growth affects equities, inflation moves rates, employment drives credit"
+        datasets: [fred_macro, fred_rates, yahoo_finance]
+        n_layers: 8
+        H: 64
+        W: 64
+
+      - subject: "Geopolitical events driving commodity prices: sanctions on oil, trade wars on metals, conflict on food"
+        datasets: [yahoo_commodities]
+
+      - subject: "How media narratives and sentiment drive market dynamics: media tone to equity flows, positioning to volatility"
+        datasets: [yahoo_finance, news_embeddings]
+
+  # ── Stage 3: Complex Dynamics ────────────────────────────────────
+  # Two parallel models for higher-order dynamics.
+  - name: complex_dynamics
+    builds_on: cross_domain
+    parallel:
+      - subject: "Corporate strategy and decision-making in macroeconomic context"
+        firms: [AAPL, NVDA, MSFT]
+        datasets: [yahoo_finance, fred_macro]
+        n_layers: 8
+        H: 64
+        W: 64
+
+      - subject: "Policy analysis: monetary policy transmission, fiscal stimulus multipliers, regulatory impact on markets"
+        countries: [jp, uk]
+        datasets: [fred_macro, fred_rates, yahoo_finance]
+        n_layers: 8
+        H: 64
+        W: 64
+
+  # ── Stage 4: Full Integration ────────────────────────────────────
+  # Single model that brings everything together.
+  - name: integration
+    builds_on: complex_dynamics
+    parallel:
+      - subject: "Full world model integration: all domains on one canvas"
+        include: ["*"]
+        datasets: [yahoo_finance, fred_macro, fred_rates, yahoo_commodities]
+        n_layers: 12
+        H: 128
+        W: 128
+        n_steps: 10000

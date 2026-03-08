@@ -8,6 +8,12 @@ For each case, they declare a projection — a subset of the World schema with
 a particular connectivity topology — and compile it to a canvas. The full
 ontology is always available; the projection selects what's active.
 
+Fog regions: when you project to a subset, any excluded sub-types get
+collapsed into 1×1 "fog" vectors that represent the aggregate of the
+unmodeled portion. Fog vectors connect to their parent and siblings,
+learning simpler dynamics as a stand-in for everything beyond the
+modeled level of abstraction.
+
 Usage:
     from general_unified_world_model import World, WorldProjection, project
 
@@ -15,19 +21,17 @@ Usage:
     proj = WorldProjection(
         include=[
             "financial",
-            "country_us.macro",
-            "country_cn.macro",
+            "country_us.macro",       # macro only — politics gets fog
             "regime",
-            "narratives.positioning",
-            "events",
-            "forecasts.macro",
-            "forecasts.financial",
+            "narratives.positioning",  # positioning only — media gets fog
         ],
         firms=["AAPL", "NVDA"],
-        individuals=["fed_chair"],
     )
 
     bound = project(proj, T=1, H=64, W=64, d_model=64)
+    # bound now has fog fields like:
+    #   country_us._fog_politics (1×1 fog for politics)
+    #   narratives._fog_media    (1×1 fog for media)
 """
 
 from __future__ import annotations
@@ -68,6 +72,117 @@ class ProjectedWorld:
     pass
 
 
+# ── Fog helpers ────────────────────────────────────────────────────────
+
+def _count_leaf_fields(obj) -> int:
+    """Count total Field instances in an object tree."""
+    if isinstance(obj, Field):
+        return 1
+    if not dataclasses.is_dataclass(obj):
+        return 0
+    count = 0
+    for f in dataclasses.fields(type(obj)):
+        count += _count_leaf_fields(getattr(obj, f.name))
+    return count
+
+
+def _get_median_period(obj) -> int:
+    """Get the median period of all Fields in an object tree."""
+    periods = []
+
+    def _collect(o):
+        if isinstance(o, Field):
+            periods.append(o.period)
+        elif dataclasses.is_dataclass(o):
+            for f in dataclasses.fields(type(o)):
+                _collect(getattr(o, f.name))
+
+    _collect(obj)
+    if not periods:
+        return 192  # default to monthly
+    periods.sort()
+    return periods[len(periods) // 2]
+
+
+def _is_directly_included(path: str, include_paths: list[str]) -> bool:
+    """Check if path is explicitly in include or covered by a broader pattern."""
+    for p in include_paths:
+        if path == p or path.startswith(p + "."):
+            return True
+    return False
+
+
+def _has_included_descendant(path: str, include_paths: list[str]) -> bool:
+    """Check if any include path targets a descendant of this path."""
+    return any(p.startswith(path + ".") for p in include_paths)
+
+
+def _apply_fog_to_object(obj, parent_path: str, include_paths: list[str]):
+    """Replace excluded sub-dataclasses with 1×1 fog Field instances.
+
+    Walks the object's children. For each child sub-dataclass:
+    - If directly included → keep as-is
+    - If has included descendants → recurse (partial inclusion)
+    - Otherwise → replace with a fog field
+
+    Returns a new dataclass instance (or the original if no fog needed).
+    """
+    if not dataclasses.is_dataclass(obj):
+        return obj
+
+    new_fields = []
+    modified = False
+
+    for f in dataclasses.fields(type(obj)):
+        child_path = f"{parent_path}.{f.name}" if parent_path else f.name
+        child_val = getattr(obj, f.name)
+
+        if isinstance(child_val, Field):
+            # Leaf Field — always keep (it's part of an included type)
+            new_fields.append((f.name, child_val))
+
+        elif dataclasses.is_dataclass(child_val):
+            if _is_directly_included(child_path, include_paths):
+                # Fully included — keep as-is
+                new_fields.append((f.name, child_val))
+            elif _has_included_descendant(child_path, include_paths):
+                # Partially included — recurse to fog the non-included parts
+                filtered = _apply_fog_to_object(child_val, child_path, include_paths)
+                new_fields.append((f.name, filtered))
+                modified = True
+            else:
+                # Not included at all — replace with fog field
+                n = _count_leaf_fields(child_val)
+                mp = _get_median_period(child_val)
+                fog = Field(
+                    1, 1, period=mp,
+                    semantic_type=f"fog: {n} unmodeled fields of {child_path}",
+                )
+                new_fields.append((f"_fog_{f.name}", fog))
+                modified = True
+
+        elif isinstance(child_val, (list, tuple)):
+            new_fields.append((f.name, child_val))
+
+    if not modified:
+        return obj
+
+    # Build a new dataclass with the filtered fields
+    dc_field_specs = []
+    for name, val in new_fields:
+        dc_field_specs.append(
+            (name, type(val), dataclasses.field(
+                default_factory=lambda v=val: copy.deepcopy(v)))
+        )
+
+    FoggedType = dataclasses.make_dataclass(
+        f"Fogged_{type(obj).__name__}", dc_field_specs
+    )
+    return FoggedType()
+
+
+# ── Projection logic ──────────────────────────────────────────────────
+
 def _make_projected_dataclass(
     world: World,
     include_paths: list[str],
@@ -77,14 +192,18 @@ def _make_projected_dataclass(
     extra_sectors: dict[str, Sector],
     extra_supply_chains: dict[str, SupplyChainNode],
     extra_countries: dict[str, Country],
+    fog: bool = True,
 ):
     """Dynamically construct a projected dataclass from the World.
 
     Since compile_schema only walks dataclass fields, we build a new
     dataclass at runtime with exactly the fields we need.
+
+    When fog=True, excluded sub-types within included parents are
+    replaced with 1×1 fog fields that represent the aggregate of
+    the unmodeled portion.
     """
     fields_dict = {}
-    defaults = {}
 
     is_wildcard = include_paths == ["*"]
 
@@ -95,6 +214,11 @@ def _make_projected_dataclass(
 
         if is_wildcard or _any_path_matches(path, include_paths):
             if not _any_path_matches(path, exclude_paths):
+                # Check if this was included via sub-path match (needs fog)
+                if fog and not is_wildcard and not _is_directly_included(path, include_paths):
+                    # Included because a sub-path matched — apply fog
+                    val = _apply_fog_to_object(val, path, include_paths)
+
                 fields_dict[path] = val
 
     # Add extra dynamic entities as named fields
@@ -147,6 +271,13 @@ class WorldProjection:
 
         exclude: List of dotted paths to exclude (applied after include).
 
+        fog: Whether to generate fog regions for excluded sub-types.
+            When True (default), any excluded sub-type within an included
+            parent is replaced with a 1×1 fog field that represents the
+            aggregate of the unmodeled portion. Fog fields participate in
+            attention, learning simpler dynamics as stand-ins for everything
+            beyond the modeled level of abstraction.
+
         firms: Named firm instances to add. Each becomes a Business block.
             E.g. ["AAPL", "NVDA", "TSMC"].
 
@@ -170,6 +301,7 @@ class WorldProjection:
     """
     include: list[str] = dc_field(default_factory=lambda: ["*"])
     exclude: list[str] = dc_field(default_factory=list)
+    fog: bool = True
 
     firms: list[str] = dc_field(default_factory=list)
     individuals: list[str] = dc_field(default_factory=list)
@@ -194,6 +326,12 @@ def project(
 
     This is the main entry point. Declare what you care about,
     get a compiled canvas ready for training.
+
+    When fog=True in the projection, excluded sub-types are replaced
+    with 1×1 fog regions. For example, include=["country_us.macro"]
+    will include the full macro sub-type but create fog fields for
+    politics, demographics, etc. Fog fields participate in attention,
+    providing a learned summary of unmodeled dynamics.
 
     Args:
         proj: WorldProjection declaring the subset.
@@ -221,6 +359,7 @@ def project(
         world, proj.include, proj.exclude,
         extra_firms, extra_individuals, extra_sectors,
         extra_supply_chains, extra_countries,
+        fog=proj.fog,
     )
 
     conn = connectivity or proj.connectivity or ConnectivityPolicy(

@@ -29,6 +29,13 @@ from general_unified_world_model.schema.resources import ResourceLayer
 from general_unified_world_model.schema.financial import GlobalFinancialLayer
 from general_unified_world_model.schema.narrative import NarrativeBeliefLayer
 from general_unified_world_model.schema.technology import TechnologyLayer
+from general_unified_world_model.schema.biology import BiologicalLayer
+from general_unified_world_model.schema.infrastructure import InfrastructureLayer
+from general_unified_world_model.schema.cyber import CyberLayer
+from general_unified_world_model.schema.space import SpaceLayer
+from general_unified_world_model.schema.health import HealthLayer
+from general_unified_world_model.schema.education import EducationLayer
+from general_unified_world_model.schema.legal import LegalLayer
 from general_unified_world_model.schema.country import Country
 from general_unified_world_model.schema.sector import Sector
 from general_unified_world_model.schema.supply_chain import SupplyChainNode
@@ -53,6 +60,27 @@ class World:
     physical:       PlanetaryPhysicalLayer = dc_field(default_factory=PlanetaryPhysicalLayer)
     resources:      ResourceLayer          = dc_field(default_factory=ResourceLayer)
     technology:     TechnologyLayer        = dc_field(default_factory=TechnologyLayer)
+
+    # Biological & ecological systems
+    biology:        BiologicalLayer        = dc_field(default_factory=BiologicalLayer)
+
+    # Physical & digital infrastructure
+    infrastructure: InfrastructureLayer    = dc_field(default_factory=InfrastructureLayer)
+
+    # Cybersecurity & digital threats
+    cyber:          CyberLayer             = dc_field(default_factory=CyberLayer)
+
+    # Space & orbital systems
+    space:          SpaceLayer             = dc_field(default_factory=SpaceLayer)
+
+    # Healthcare systems
+    health:         HealthLayer            = dc_field(default_factory=HealthLayer)
+
+    # Education & human capital
+    education:      EducationLayer         = dc_field(default_factory=EducationLayer)
+
+    # Legal & regulatory framework
+    legal:          LegalLayer             = dc_field(default_factory=LegalLayer)
 
     # High-bandwidth financial core
     financial:      GlobalFinancialLayer   = dc_field(default_factory=GlobalFinancialLayer)

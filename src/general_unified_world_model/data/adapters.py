@@ -19,6 +19,9 @@ import numpy as np
 import torch
 
 from general_unified_world_model.training.heterogeneous import DatasetSpec, FieldMapping
+from general_unified_world_model.schema.temporal_constants import (
+    TICK, DAILY, WEEKLY, MONTHLY, QUARTERLY,
+)
 
 
 # ── Normalization functions ──────────────────────────────────────────────
@@ -72,69 +75,69 @@ def rank_normalize():
 # Standard FRED series → world model field mappings
 FRED_MAPPINGS = {
     # Output & Growth
-    "GDP": ("country_us.macro.output.gdp_official.value", 576, None),
-    "GDPC1": ("country_us.macro.output.gdp_official.value", 576, None),
-    "INDPRO": ("country_us.macro.output.industrial_production", 192, pct_change()),
-    "TCU": ("country_us.macro.output.capacity_utilization", 192, None),
-    "RSAFS": ("country_us.macro.output.retail_sales", 192, pct_change()),
-    "DGORDER": ("country_us.macro.output.new_orders", 192, pct_change()),
+    "GDP": ("country_us.macro.output.gdp_official.value", QUARTERLY, None),
+    "GDPC1": ("country_us.macro.output.gdp_official.value", QUARTERLY, None),
+    "INDPRO": ("country_us.macro.output.industrial_production", MONTHLY, pct_change()),
+    "TCU": ("country_us.macro.output.capacity_utilization", MONTHLY, None),
+    "RSAFS": ("country_us.macro.output.retail_sales", MONTHLY, pct_change()),
+    "DGORDER": ("country_us.macro.output.new_orders", MONTHLY, pct_change()),
 
     # Inflation
-    "CPIAUCSL": ("country_us.macro.inflation.headline_cpi", 192, pct_change()),
-    "CPILFESL": ("country_us.macro.inflation.core_cpi", 192, pct_change()),
-    "PCEPI": ("country_us.macro.inflation.pce_deflator", 192, pct_change()),
-    "PPIFIS": ("country_us.macro.inflation.ppi", 192, pct_change()),
-    "CES0500000003": ("country_us.macro.inflation.wage_growth", 192, pct_change()),
-    "CUSR0000SEHA": ("country_us.macro.inflation.rent_inflation", 192, pct_change()),
-    "MICH": ("country_us.macro.inflation.expectations_1y", 192, None),
-    "T5YIE": ("country_us.macro.inflation.expectations_5y", 192, None),
+    "CPIAUCSL": ("country_us.macro.inflation.headline_cpi", MONTHLY, pct_change()),
+    "CPILFESL": ("country_us.macro.inflation.core_cpi", MONTHLY, pct_change()),
+    "PCEPI": ("country_us.macro.inflation.pce_deflator", MONTHLY, pct_change()),
+    "PPIFIS": ("country_us.macro.inflation.ppi", MONTHLY, pct_change()),
+    "CES0500000003": ("country_us.macro.inflation.wage_growth", MONTHLY, pct_change()),
+    "CUSR0000SEHA": ("country_us.macro.inflation.rent_inflation", MONTHLY, pct_change()),
+    "MICH": ("country_us.macro.inflation.expectations_1y", MONTHLY, None),
+    "T5YIE": ("country_us.macro.inflation.expectations_5y", MONTHLY, None),
 
     # Labor
-    "UNRATE": ("country_us.macro.labor.unemployment_rate", 192, None),
-    "PAYEMS": ("country_us.macro.labor.nfp_change", 192, pct_change()),
-    "ICSA": ("country_us.macro.labor.initial_claims", 48, None),
-    "CCSA": ("country_us.macro.labor.continuing_claims", 48, None),
-    "JTSJOL": ("country_us.macro.labor.job_openings", 192, None),
-    "JTSQUR": ("country_us.macro.labor.quits_rate", 192, None),
-    "CIVPART": ("country_us.macro.labor.lfpr", 192, None),
-    "CES0500000003": ("country_us.macro.labor.avg_hourly_earnings", 192, pct_change()),
+    "UNRATE": ("country_us.macro.labor.unemployment_rate", MONTHLY, None),
+    "PAYEMS": ("country_us.macro.labor.nfp_change", MONTHLY, pct_change()),
+    "ICSA": ("country_us.macro.labor.initial_claims", WEEKLY, None),
+    "CCSA": ("country_us.macro.labor.continuing_claims", WEEKLY, None),
+    "JTSJOL": ("country_us.macro.labor.job_openings", MONTHLY, None),
+    "JTSQUR": ("country_us.macro.labor.quits_rate", MONTHLY, None),
+    "CIVPART": ("country_us.macro.labor.lfpr", MONTHLY, None),
+    "CES0500000003": ("country_us.macro.labor.avg_hourly_earnings", MONTHLY, pct_change()),
 
     # Fiscal
-    "GFDEGDQ188S": ("country_us.macro.fiscal.debt_to_gdp", 576, None),
-    "FYFSGDA188S": ("country_us.macro.fiscal.deficit_to_gdp", 576, None),
-    "A091RC1Q027SBEA": ("country_us.macro.fiscal.interest_expense_share", 576, None),
+    "GFDEGDQ188S": ("country_us.macro.fiscal.debt_to_gdp", QUARTERLY, None),
+    "FYFSGDA188S": ("country_us.macro.fiscal.deficit_to_gdp", QUARTERLY, None),
+    "A091RC1Q027SBEA": ("country_us.macro.fiscal.interest_expense_share", QUARTERLY, None),
 
     # Housing
-    "CSUSHPINSA": ("country_us.macro.housing.home_price_index", 192, pct_change()),
-    "HOUST": ("country_us.macro.housing.housing_starts", 192, None),
-    "MORTGAGE30US": ("country_us.macro.housing.mortgage_rate", 16, None),
-    "EXHOSLUSM495S": ("country_us.macro.housing.existing_home_sales", 192, None),
+    "CSUSHPINSA": ("country_us.macro.housing.home_price_index", MONTHLY, pct_change()),
+    "HOUST": ("country_us.macro.housing.housing_starts", MONTHLY, None),
+    "MORTGAGE30US": ("country_us.macro.housing.mortgage_rate", DAILY, None),
+    "EXHOSLUSM495S": ("country_us.macro.housing.existing_home_sales", MONTHLY, None),
 
     # Yield Curve
-    "DFF": ("financial.yield_curves.short_rate", 1, None),
-    "DGS2": ("financial.yield_curves.two_year", 1, None),
-    "DGS5": ("financial.yield_curves.five_year", 1, None),
-    "DGS10": ("financial.yield_curves.ten_year", 1, None),
-    "DGS30": ("financial.yield_curves.thirty_year", 1, None),
-    "T10Y2Y": ("financial.yield_curves.slope_2s10s", 1, None),
-    "T10YIE": ("financial.yield_curves.breakeven_inflation", 1, None),
+    "DFF": ("financial.yield_curves.short_rate", TICK, None),
+    "DGS2": ("financial.yield_curves.two_year", TICK, None),
+    "DGS5": ("financial.yield_curves.five_year", TICK, None),
+    "DGS10": ("financial.yield_curves.ten_year", TICK, None),
+    "DGS30": ("financial.yield_curves.thirty_year", TICK, None),
+    "T10Y2Y": ("financial.yield_curves.slope_2s10s", TICK, None),
+    "T10YIE": ("financial.yield_curves.breakeven_inflation", TICK, None),
 
     # Credit
-    "BAMLC0A4CBBB": ("financial.credit.ig_spread", 1, None),
-    "BAMLH0A0HYM2": ("financial.credit.hy_spread", 1, None),
+    "BAMLC0A4CBBB": ("financial.credit.ig_spread", TICK, None),
+    "BAMLH0A0HYM2": ("financial.credit.hy_spread", TICK, None),
 
     # Monetary
-    "DFEDTARU": ("financial.central_banks.policy_rate", 192, None),
-    "WALCL": ("financial.central_banks.balance_sheet_size", 48, None),
+    "DFEDTARU": ("financial.central_banks.policy_rate", MONTHLY, None),
+    "WALCL": ("financial.central_banks.balance_sheet_size", WEEKLY, None),
 
     # Liquidity
-    "RRPONTSYD": ("financial.liquidity.fed_reverse_repo", 16, None),
-    "WTREGEN": ("financial.liquidity.treasury_general_account", 16, None),
-    "TOTRESNS": ("financial.liquidity.bank_reserves", 48, None),
+    "RRPONTSYD": ("financial.liquidity.fed_reverse_repo", DAILY, None),
+    "WTREGEN": ("financial.liquidity.treasury_general_account", DAILY, None),
+    "TOTRESNS": ("financial.liquidity.bank_reserves", WEEKLY, None),
 
     # Sentiment
-    "UMCSENT": ("country_us.domestic_sentiment", 192, None),
-    "USSLIND": ("narratives.public.consumer_confidence", 192, None),
+    "UMCSENT": ("country_us.domestic_sentiment", MONTHLY, None),
+    "USSLIND": ("narratives.public.consumer_confidence", MONTHLY, None),
 }
 
 
@@ -202,7 +205,7 @@ def fred_adapter(
     spec = DatasetSpec(
         name="FRED",
         mappings=mappings,
-        base_period=1,  # FRED data comes at natural frequency
+        base_period=TICK,  # FRED data comes at natural frequency
         weight=1.0,
     )
 
@@ -326,7 +329,7 @@ def yahoo_finance_adapter(
                 source_key=key,
                 target_field=target_field,
                 transform=log_return(),  # always use log returns for prices
-                frequency=1,  # daily
+                frequency=TICK,  # daily
             ))
         except (KeyError, TypeError):
             continue
@@ -334,7 +337,7 @@ def yahoo_finance_adapter(
     spec = DatasetSpec(
         name="Yahoo Finance",
         mappings=mappings,
-        base_period=16,  # daily = period 16 in base ticks
+        base_period=DAILY,  # daily = period 16 in base ticks
         weight=1.0,
     )
 
@@ -372,13 +375,13 @@ def pmi_adapter(
                 source_key=key,
                 target_field=target,
                 transform=minmax(30.0, 70.0),  # PMI range
-                frequency=192,  # monthly
+                frequency=MONTHLY,  # monthly
             ))
 
     spec = DatasetSpec(
         name=f"PMI ({country.upper()})",
         mappings=mappings,
-        base_period=192,
+        base_period=MONTHLY,
         weight=1.5,  # PMI is highly informative
     )
 
@@ -417,13 +420,13 @@ def earnings_adapter(
             mappings.append(FieldMapping(
                 source_key=source,
                 target_field=f"{prefix}.{field}",
-                frequency=576,  # quarterly
+                frequency=QUARTERLY,  # quarterly
             ))
 
     spec = DatasetSpec(
         name=f"Earnings ({firm_name})",
         mappings=mappings,
-        base_period=576,
+        base_period=QUARTERLY,
         weight=2.0,
     )
 
@@ -451,14 +454,14 @@ def news_adapter(
         FieldMapping(
             source_key="news_emb",
             target_field="events.news_embedding",
-            frequency=1,
+            frequency=TICK,
         ),
     ]
 
     spec = DatasetSpec(
         name="News Embeddings",
         mappings=mappings,
-        base_period=1,
+        base_period=TICK,
         weight=0.5,
     )
 

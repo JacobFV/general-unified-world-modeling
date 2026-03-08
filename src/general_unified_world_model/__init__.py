@@ -39,6 +39,11 @@ from general_unified_world_model.training.diffusion import DiffusionWorldModelTr
 from general_unified_world_model.training.dag_curriculum import (
     DAGCurriculumTrainer,
     TrainingNode,
+    CurriculumSpec,
+    CurriculumStage,
+    CurriculumSubject,
+    resolve_subject,
+    STANDARD_CURRICULUM,
 )
 
 # Inference

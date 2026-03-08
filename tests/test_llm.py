@@ -296,8 +296,8 @@ class TestLiveAnthropic:
             "macro" in p for p in includes
         ), f"Expected macro-related fields, got: {includes}"
 
-        # Should compile without errors
-        bound = result.compile(T=1, H=32, W=32, d_model=32)
+        # Should compile without errors (large canvas for LLM-generated projections)
+        bound = result.compile(T=1, H=96, W=96, d_model=32)
         assert len(bound.field_names) > 10
 
         # Reasoning should be non-empty

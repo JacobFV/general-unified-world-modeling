@@ -54,7 +54,7 @@ def test_schema_and_semantic():
     with timer("compile full world"):
         world = World()
         bound = compile_schema(
-            world, T=1, H=128, W=128, d_model=32,
+            world, T=1, H=160, W=160, d_model=32,
             connectivity=ConnectivityPolicy(intra="dense", parent_child="hub_spoke"),
         )
     print(f"  {len(bound.field_names)} fields, {bound.layout.num_positions} positions")
@@ -291,6 +291,59 @@ def test_inference():
     print(f"  Predicted {len(predictions)} fields")
 
 
+def test_fog_regions():
+    """Test 8: Fog regions for partial projections."""
+    print("\n8. Fog Regions")
+    with timer("fog projection"):
+        proj = WorldProjection(include=["financial.yield_curves", "regime"], fog=True)
+        bound = project(proj, T=1, H=24, W=24, d_model=32)
+
+    fog_fields = [n for n in bound.field_names if "_fog_" in n]
+    regular_fields = [n for n in bound.field_names if "_fog_" not in n]
+    print(f"  {len(regular_fields)} modeled fields, {len(fog_fields)} fog regions")
+    assert len(fog_fields) > 0, "Expected fog fields"
+
+    # Each fog field should have connectivity
+    fog_conns = [c for c in bound.topology.connections
+                 if "_fog_" in c.src or "_fog_" in c.dst]
+    print(f"  {len(fog_conns)} fog connections")
+    assert len(fog_conns) > 0
+
+    # Fog semantic types should be descriptive
+    for name in fog_fields[:2]:
+        print(f"  {name}: {bound[name].spec.semantic_type}")
+
+
+def test_nl_curriculum():
+    """Test 9: Natural language curriculum specification."""
+    print("\n9. NL Curriculum")
+    from general_unified_world_model.training.dag_curriculum import (
+        resolve_subject, CurriculumSpec, STANDARD_CURRICULUM,
+    )
+
+    with timer("resolve subjects"):
+        tests = {
+            "Financial markets": "financial",
+            "GDP and inflation": "macro",
+            "Oil and commodities": "resource",
+        }
+        for desc, expected in tests.items():
+            paths = resolve_subject(desc)
+            matched = any(expected in p for p in paths)
+            assert matched, f"Expected '{expected}' in resolve('{desc}'), got {paths}"
+
+    with timer("build standard curriculum"):
+        nodes = STANDARD_CURRICULUM.to_training_nodes()
+
+    print(f"  Standard curriculum: {len(nodes)} nodes, 4 stages")
+    assert len(nodes) == 12
+
+    # Check DAG structure
+    foundations = [n for n in nodes if n.parents == []]
+    print(f"  Foundations: {len(foundations)} parallel nodes")
+    assert len(foundations) == 6
+
+
 def main():
     print("=" * 60)
     print("SMOKE TEST: General Unified World Model")
@@ -305,6 +358,8 @@ def main():
     test_diffusion_training()
     test_dag_curriculum()
     test_inference()
+    test_fog_regions()
+    test_nl_curriculum()
 
     elapsed = time.time() - start
     print(f"\n{'=' * 60}")

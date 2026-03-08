@@ -558,3 +558,450 @@ class DAGCurriculumTrainer:
             raise ValueError(f"Unknown tier {tier}. Valid: 0-3")
 
         self.run(tiers[tier])
+
+
+# ── Natural Language Curriculum Specification ────────────────────────────
+
+# Keyword → include path mapping for resolving natural language subjects
+# to world model field paths without requiring an LLM.
+SUBJECT_KEYWORDS: dict[str, list[str]] = {
+    # Financial
+    "financial": ["financial"],
+    "finance": ["financial"],
+    "yield": ["financial.yield_curves"],
+    "yield curve": ["financial.yield_curves"],
+    "credit": ["financial.credit"],
+    "equity": ["financial.equities"],
+    "equities": ["financial.equities"],
+    "stock": ["financial.equities"],
+    "fx": ["financial.fx"],
+    "currency": ["financial.fx"],
+    "crypto": ["financial.crypto"],
+    "bitcoin": ["financial.crypto"],
+    "liquidity": ["financial.liquidity"],
+    "central bank": ["financial.central_banks"],
+    "monetary": ["financial.central_banks"],
+    "derivatives": ["financial.equities", "financial.fx"],
+    "vix": ["financial.equities"],
+    "volatility": ["financial.equities"],
+    # Macro
+    "macro": ["country_us.macro"],
+    "macroeconomic": ["country_us.macro"],
+    "gdp": ["country_us.macro.output"],
+    "inflation": ["country_us.macro.inflation"],
+    "employment": ["country_us.macro.labor"],
+    "labor": ["country_us.macro.labor"],
+    "unemployment": ["country_us.macro.labor"],
+    "housing": ["country_us.macro.housing"],
+    "fiscal": ["country_us.macro.fiscal"],
+    "trade": ["country_us.macro.trade"],
+    # Countries
+    "us economy": ["country_us.macro"],
+    "china": ["country_cn.macro"],
+    "chinese": ["country_cn.macro"],
+    "europe": ["country_eu.macro"],
+    "european": ["country_eu.macro"],
+    # Politics
+    "politic": ["country_us.politics"],
+    "political": ["country_us.politics"],
+    "governance": ["country_us.politics"],
+    "geopolitic": ["country_us.politics", "country_cn.politics"],
+    "election": ["country_us.politics"],
+    # Resources
+    "resource": ["resources"],
+    "energy": ["resources.energy"],
+    "oil": ["resources.energy"],
+    "commodity": ["resources"],
+    "commodities": ["resources"],
+    "metal": ["resources.metals"],
+    "food": ["resources.food"],
+    "water": ["resources.water"],
+    "compute": ["resources.compute"],
+    # Technology
+    "technology": ["technology"],
+    "tech": ["technology"],
+    "ai": ["technology"],
+    "semiconductor": ["resources.compute", "technology"],
+    "biotech": ["technology"],
+    # Narratives
+    "narrative": ["narratives"],
+    "sentiment": ["narratives"],
+    "media": ["narratives.media"],
+    "positioning": ["narratives.positioning"],
+    # Regime & Events
+    "regime": ["regime"],
+    "event": ["events"],
+    "news": ["events"],
+    # Forecasts
+    "forecast": ["forecasts"],
+    "prediction": ["forecasts"],
+    # Business
+    "corporate": ["financial.equities"],
+    "firm": ["financial.equities"],
+    "company": ["financial.equities"],
+    "business": ["financial.equities"],
+    # New layers
+    "biology": ["biology"],
+    "ecological": ["biology"],
+    "ecosystem": ["biology"],
+    "disease": ["biology"],
+    "health": ["health"],
+    "healthcare": ["health"],
+    "infrastructure": ["infrastructure"],
+    "power grid": ["infrastructure.power"],
+    "transport": ["infrastructure.transport"],
+    "telecom": ["infrastructure.telecom"],
+    "cyber": ["cyber"],
+    "space": ["space"],
+    "satellite": ["space"],
+    "education": ["education"],
+    "legal": ["legal"],
+    "regulatory": ["legal"],
+}
+
+
+def resolve_subject(description: str) -> list[str]:
+    """Resolve a natural language subject description to include paths.
+
+    Matches keywords in the description against SUBJECT_KEYWORDS to build
+    a list of world model field paths. Falls back to broad include if no
+    keywords match.
+
+    Args:
+        description: Natural language description of the training subject.
+
+    Returns:
+        List of dotted field paths to include.
+
+    Example:
+        >>> resolve_subject("How inflation drives yield curves and credit spreads")
+        ['country_us.macro.inflation', 'financial.yield_curves', 'financial.credit']
+    """
+    desc_lower = description.lower()
+    includes = []
+    matched_keywords = set()
+
+    # Sort keywords by length (longest first) to match multi-word phrases
+    sorted_keywords = sorted(SUBJECT_KEYWORDS.keys(), key=len, reverse=True)
+
+    for keyword in sorted_keywords:
+        if keyword in desc_lower and keyword not in matched_keywords:
+            for path in SUBJECT_KEYWORDS[keyword]:
+                if path not in includes:
+                    includes.append(path)
+            matched_keywords.add(keyword)
+            # Also mark sub-keywords as matched to avoid duplication
+            for other in sorted_keywords:
+                if other in keyword and other != keyword:
+                    matched_keywords.add(other)
+
+    # Always include regime (it's the privileged latent)
+    if "regime" not in includes and includes:
+        includes.append("regime")
+
+    if not includes:
+        # Fallback: include everything if no keywords matched
+        includes = ["*"]
+
+    return includes
+
+
+@dataclass
+class CurriculumSubject:
+    """A single training subject within a curriculum stage.
+
+    Args:
+        subject: Natural language description of what to learn.
+        datasets: Data sources to use for training.
+        firms: Firms to instantiate as dynamic entities.
+        individuals: Individuals to instantiate.
+        countries: Additional countries to instantiate.
+        include: Explicit include paths (overrides NL resolution).
+        H, W, d_model: Canvas dimensions (override defaults).
+        n_layers, n_loops: Model architecture (override defaults).
+        n_steps: Training steps (override defaults).
+    """
+    subject: str
+    datasets: list[str] = dc_field(default_factory=list)
+    firms: list[str] = dc_field(default_factory=list)
+    individuals: list[str] = dc_field(default_factory=list)
+    countries: list[str] = dc_field(default_factory=list)
+    include: list[str] | None = None
+    H: int | None = None
+    W: int | None = None
+    d_model: int | None = None
+    n_layers: int | None = None
+    n_loops: int | None = None
+    n_steps: int | None = None
+
+
+@dataclass
+class CurriculumStage:
+    """A stage in the training curriculum.
+
+    A stage contains parallel subjects (fork) that all train simultaneously
+    from the same parent weights. After all subjects in a stage complete,
+    their weights are merged (join) before proceeding to the next stage.
+
+    Args:
+        name: Stage name (e.g. "foundations", "cross_domain").
+        parallel: List of training subjects to run in parallel.
+        builds_on: Name of the previous stage (or None for the first).
+    """
+    name: str
+    parallel: list[CurriculumSubject] = dc_field(default_factory=list)
+    builds_on: str | None = None
+
+
+@dataclass
+class CurriculumSpec:
+    """Full curriculum specification — a sequence of stages forming a DAG.
+
+    Each stage forks into parallel subjects, trains them, then joins
+    (merges weights) before the next stage.
+
+    Args:
+        name: Curriculum name.
+        stages: Ordered list of stages.
+        defaults: Default hyperparameters for all nodes.
+    """
+    name: str = "curriculum"
+    stages: list[CurriculumStage] = dc_field(default_factory=list)
+    defaults: dict = dc_field(default_factory=lambda: {
+        "H": 32, "W": 32, "d_model": 64,
+        "n_layers": 4, "n_loops": 3,
+        "n_steps": 5000, "lr": 1e-4, "batch_size": 32,
+    })
+
+    def to_training_nodes(self) -> list[TrainingNode]:
+        """Convert this curriculum spec to a list of TrainingNodes.
+
+        Each CurriculumSubject becomes a TrainingNode. Stages define
+        the DAG structure: all subjects within a stage share the same
+        parents (the subjects of the previous stage).
+
+        Returns:
+            List of TrainingNode instances ready for DAGCurriculumTrainer.
+        """
+        nodes = []
+        prev_stage_names = []
+
+        for stage in self.stages:
+            stage_node_names = []
+
+            for i, subj in enumerate(stage.parallel):
+                # Resolve include paths from natural language
+                include = subj.include or resolve_subject(subj.subject)
+
+                # Generate a clean node name
+                name = f"{stage.name}_{i}" if len(stage.parallel) > 1 else stage.name
+                if len(stage.parallel) > 1:
+                    # Use first two keywords from subject
+                    words = subj.subject.lower().split()[:3]
+                    clean = "_".join(w for w in words if w.isalnum())[:20]
+                    name = f"{stage.name}_{clean}"
+
+                # Determine parents
+                if stage.builds_on and prev_stage_names:
+                    parents = list(prev_stage_names)
+                else:
+                    parents = []
+
+                # Merge defaults with overrides
+                d = dict(self.defaults)
+                for key in ["H", "W", "d_model", "n_layers", "n_loops", "n_steps"]:
+                    val = getattr(subj, key, None)
+                    if val is not None:
+                        d[key] = val
+
+                node = TrainingNode(
+                    name=name,
+                    description=subj.subject,
+                    include=include,
+                    parents=parents,
+                    H=d["H"], W=d["W"], d_model=d["d_model"],
+                    n_layers=d["n_layers"], n_loops=d["n_loops"],
+                    n_steps=d["n_steps"], lr=d.get("lr", 1e-4),
+                    batch_size=d.get("batch_size", 32),
+                    data_sources=subj.datasets,
+                    firms=subj.firms,
+                    individuals=subj.individuals,
+                    countries=subj.countries,
+                )
+                nodes.append(node)
+                stage_node_names.append(name)
+
+            prev_stage_names = stage_node_names
+
+        return nodes
+
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> CurriculumSpec:
+        """Load a curriculum specification from a YAML file.
+
+        YAML format:
+            name: my_curriculum
+            defaults:
+              H: 48
+              W: 48
+              n_steps: 5000
+            stages:
+              - name: foundations
+                parallel:
+                  - subject: "Core financial markets: yields, credit, equities"
+                    datasets: [yahoo_finance, fred_rates]
+                  - subject: "US macroeconomic fundamentals"
+                    datasets: [fred_macro]
+              - name: cross_domain
+                builds_on: foundations
+                parallel:
+                  - subject: "How macro conditions drive financial markets"
+                    datasets: [fred_macro, yahoo_finance]
+        """
+        import yaml  # optional dependency
+
+        path = Path(path)
+        with open(path) as f:
+            raw = yaml.safe_load(f)
+
+        defaults = raw.get("defaults", {})
+        stages = []
+
+        for stage_raw in raw.get("stages", []):
+            subjects = []
+            for s in stage_raw.get("parallel", []):
+                subjects.append(CurriculumSubject(
+                    subject=s["subject"],
+                    datasets=s.get("datasets", []),
+                    firms=s.get("firms", []),
+                    individuals=s.get("individuals", []),
+                    countries=s.get("countries", []),
+                    include=s.get("include"),
+                    H=s.get("H"), W=s.get("W"), d_model=s.get("d_model"),
+                    n_layers=s.get("n_layers"), n_loops=s.get("n_loops"),
+                    n_steps=s.get("n_steps"),
+                ))
+            stages.append(CurriculumStage(
+                name=stage_raw["name"],
+                parallel=subjects,
+                builds_on=stage_raw.get("builds_on"),
+            ))
+
+        return cls(name=raw.get("name", "curriculum"), stages=stages, defaults=defaults)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> CurriculumSpec:
+        """Load a curriculum specification from a Python dict.
+
+        Same structure as the YAML format.
+        """
+        defaults = d.get("defaults", {})
+        stages = []
+
+        for stage_raw in d.get("stages", []):
+            subjects = []
+            for s in stage_raw.get("parallel", []):
+                subjects.append(CurriculumSubject(
+                    subject=s["subject"],
+                    datasets=s.get("datasets", []),
+                    firms=s.get("firms", []),
+                    individuals=s.get("individuals", []),
+                    countries=s.get("countries", []),
+                    include=s.get("include"),
+                    H=s.get("H"), W=s.get("W"), d_model=s.get("d_model"),
+                    n_layers=s.get("n_layers"), n_loops=s.get("n_loops"),
+                    n_steps=s.get("n_steps"),
+                ))
+            stages.append(CurriculumStage(
+                name=stage_raw["name"],
+                parallel=subjects,
+                builds_on=stage_raw.get("builds_on"),
+            ))
+
+        return cls(name=d.get("name", "curriculum"), stages=stages, defaults=defaults)
+
+
+# ── Standard Curriculum (NL version) ─────────────────────────────────────
+
+STANDARD_CURRICULUM = CurriculumSpec(
+    name="general_unified_world_model",
+    defaults={"H": 48, "W": 48, "d_model": 64, "n_layers": 6, "n_loops": 3, "n_steps": 5000},
+    stages=[
+        CurriculumStage(
+            name="foundations",
+            parallel=[
+                CurriculumSubject(
+                    subject="Core financial markets: yield curves, credit spreads, equity indices, FX, derivatives pricing",
+                    datasets=["yahoo_finance", "fred_rates"],
+                ),
+                CurriculumSubject(
+                    subject="US macroeconomic fundamentals: GDP, inflation, employment, housing, fiscal policy",
+                    datasets=["fred_macro"],
+                ),
+                CurriculumSubject(
+                    subject="Political systems, governance, and geopolitical dynamics",
+                ),
+                CurriculumSubject(
+                    subject="Natural resources, energy markets, and commodity supply chains",
+                    datasets=["yahoo_commodities"],
+                ),
+                CurriculumSubject(
+                    subject="Technology frontier: AI, semiconductors, biotech, quantum computing",
+                ),
+                CurriculumSubject(
+                    subject="Media narratives, investor positioning, and public sentiment",
+                    datasets=["news_embeddings"],
+                ),
+            ],
+        ),
+        CurriculumStage(
+            name="cross_domain",
+            builds_on="foundations",
+            parallel=[
+                CurriculumSubject(
+                    subject="How macroeconomic conditions drive financial markets: GDP → equities, inflation → rates",
+                    datasets=["fred_macro", "fred_rates", "yahoo_finance"],
+                    n_layers=8, H=64, W=64,
+                ),
+                CurriculumSubject(
+                    subject="Geopolitical events driving commodity prices: sanctions → oil, trade wars → metals",
+                    datasets=["yahoo_commodities"],
+                ),
+                CurriculumSubject(
+                    subject="How media narratives and sentiment drive market dynamics",
+                    datasets=["yahoo_finance", "news_embeddings"],
+                ),
+            ],
+        ),
+        CurriculumStage(
+            name="complex_dynamics",
+            builds_on="cross_domain",
+            parallel=[
+                CurriculumSubject(
+                    subject="Corporate strategy and decision-making in macroeconomic context",
+                    firms=["AAPL", "NVDA", "MSFT"],
+                    datasets=["yahoo_finance", "fred_macro"],
+                    n_layers=8, H=64, W=64,
+                ),
+                CurriculumSubject(
+                    subject="Policy analysis: monetary transmission, fiscal multipliers, regulatory impact on markets",
+                    countries=["jp", "uk"],
+                    datasets=["fred_macro", "fred_rates", "yahoo_finance"],
+                    n_layers=8, H=64, W=64,
+                ),
+            ],
+        ),
+        CurriculumStage(
+            name="integration",
+            builds_on="complex_dynamics",
+            parallel=[
+                CurriculumSubject(
+                    subject="Full world model: all domains integrated, regime state receives gradient from everything",
+                    include=["*"],
+                    datasets=["yahoo_finance", "fred_macro", "fred_rates", "yahoo_commodities"],
+                    n_layers=12, H=128, W=128, n_steps=10000,
+                ),
+            ],
+        ),
+    ],
+)

@@ -1,0 +1,57 @@
+site_name: General Unified World Model
+site_description: "A typed causal ontology of civilization, built on canvas-engineering structured latent spaces."
+site_url: https://jacobfv.github.io/general-unified-world-modeling/
+repo_url: https://github.com/JacobFV/general-unified-world-modeling
+repo_name: JacobFV/general-unified-world-modeling
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: deep orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: deep orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - content.code.copy
+    - content.code.annotate
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Architecture: architecture.md
+  - Training: training.md
+  - API Reference: api.md
+  - Examples: examples.md
+  - Training Curriculum (Research): training_curriculum.md

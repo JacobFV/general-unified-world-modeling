@@ -13,6 +13,13 @@ from general_unified_world_model.schema.macro import MacroEconomy
 from general_unified_world_model.schema.political import PoliticalLayer
 from general_unified_world_model.schema.narrative import NarrativeBeliefLayer
 from general_unified_world_model.schema.technology import TechnologyLayer
+from general_unified_world_model.schema.biology import BiologicalLayer
+from general_unified_world_model.schema.infrastructure import InfrastructureLayer
+from general_unified_world_model.schema.cyber import CyberLayer
+from general_unified_world_model.schema.space import SpaceLayer
+from general_unified_world_model.schema.health import HealthLayer
+from general_unified_world_model.schema.education import EducationLayer
+from general_unified_world_model.schema.legal import LegalLayer
 from general_unified_world_model.schema.demographics import DemographicLayer
 from general_unified_world_model.schema.sector import Sector
 from general_unified_world_model.schema.supply_chain import SupplyChainNode

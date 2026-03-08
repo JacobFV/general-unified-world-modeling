@@ -6,36 +6,39 @@ These constrain everything above them but change on multi-year timescales.
 
 from dataclasses import dataclass, field as dc_field
 from canvas_engineering import Field
+from general_unified_world_model.schema.temporal_constants import (
+    TICK, DAILY, WEEKLY, MONTHLY, QUARTERLY, ANNUAL, DECADAL,
+)
 
 
 @dataclass
 class ClimateState:
-    global_temp_anomaly:        Field = Field(1, 2, period=2304)
-    enso_phase:                 Field = Field(1, 2, period=576)
-    monsoon_state:              Field = Field(1, 2, period=576)
-    polar_vortex_stability:     Field = Field(1, 2, period=576)
-    extreme_weather_freq:       Field = Field(1, 2, period=192)
-    sea_level_trend:            Field = Field(1, 1, period=4608)
-    carbon_ppm:                 Field = Field(1, 1, period=2304)
+    global_temp_anomaly:        Field = Field(1, 2, period=ANNUAL)
+    enso_phase:                 Field = Field(1, 2, period=QUARTERLY)
+    monsoon_state:              Field = Field(1, 2, period=QUARTERLY)
+    polar_vortex_stability:     Field = Field(1, 2, period=QUARTERLY)
+    extreme_weather_freq:       Field = Field(1, 2, period=MONTHLY)
+    sea_level_trend:            Field = Field(1, 1, period=DECADAL)
+    carbon_ppm:                 Field = Field(1, 1, period=ANNUAL)
 
 
 @dataclass
 class GeographicInfrastructure:
-    shipping_lane_capacity:     Field = Field(2, 4, period=2304)
-    chokepoint_risk:            Field = Field(1, 4, period=192)      # Suez/Hormuz/Malacca/Panama
-    undersea_cable_topology:    Field = Field(1, 2, period=2304)
-    rail_freight_network:       Field = Field(1, 2, period=2304)
-    port_congestion:            Field = Field(1, 4, period=16)
-    air_freight_utilization:    Field = Field(1, 2, period=16)
+    shipping_lane_capacity:     Field = Field(2, 4, period=ANNUAL)
+    chokepoint_risk:            Field = Field(1, 4, period=MONTHLY)      # Suez/Hormuz/Malacca/Panama
+    undersea_cable_topology:    Field = Field(1, 2, period=ANNUAL)
+    rail_freight_network:       Field = Field(1, 2, period=ANNUAL)
+    port_congestion:            Field = Field(1, 4, period=DAILY)
+    air_freight_utilization:    Field = Field(1, 2, period=DAILY)
 
 
 @dataclass
 class DisasterLayer:
-    seismic_risk_structural:    Field = Field(1, 2, period=2304)
-    active_disaster_state:      Field = Field(1, 4, period=1)
-    pandemic_risk:              Field = Field(1, 2, period=48)
-    volcanic_risk:              Field = Field(1, 1, period=576)
-    wildfire_state:             Field = Field(1, 2, period=16)
+    seismic_risk_structural:    Field = Field(1, 2, period=ANNUAL)
+    active_disaster_state:      Field = Field(1, 4, period=TICK)
+    pandemic_risk:              Field = Field(1, 2, period=WEEKLY)
+    volcanic_risk:              Field = Field(1, 1, period=QUARTERLY)
+    wildfire_state:             Field = Field(1, 2, period=DAILY)
 
 
 @dataclass

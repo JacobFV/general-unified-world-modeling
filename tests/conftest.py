@@ -1,10 +1,26 @@
 """Shared test fixtures."""
 
+import os
+from pathlib import Path
+
 import pytest
 import torch
 from canvas_engineering import ConnectivityPolicy
 
 from general_unified_world_model.projection.subset import WorldProjection, project
+
+# Load .env file so API keys are available for live tests
+_env_path = Path(__file__).parent.parent / ".env"
+if _env_path.exists():
+    with open(_env_path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, _, value = line.partition("=")
+                key = key.strip()
+                value = value.strip().strip("'\"")
+                if key and key not in os.environ:
+                    os.environ[key] = value
 
 
 @pytest.fixture
@@ -25,4 +41,4 @@ def macro_bound():
 def full_bound():
     """Full world model (expensive, use sparingly)."""
     proj = WorldProjection(include=["*"])
-    return project(proj, T=1, H=128, W=128, d_model=64)
+    return project(proj, T=1, H=160, W=160, d_model=64)

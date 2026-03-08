@@ -7,80 +7,83 @@ Each firm also embeds a supply chain node for its position in the value chain.
 from dataclasses import dataclass, field as dc_field
 from canvas_engineering import Field
 from general_unified_world_model.schema.supply_chain import SupplyChainNode
+from general_unified_world_model.schema.temporal_constants import (
+    TICK, DAILY, WEEKLY, MONTHLY, QUARTERLY, ANNUAL,
+)
 
 
 @dataclass
 class FirmFinancials:
-    revenue:                    Field = Field(1, 2, period=576)
-    revenue_growth:             Field = Field(1, 2, period=576, loss_weight=2.0)
-    cogs:                       Field = Field(1, 2, period=576)
-    gross_margin:               Field = Field(1, 2, period=576, loss_weight=2.0)
-    opex:                       Field = Field(1, 2, period=576)
-    operating_margin:           Field = Field(1, 2, period=576, loss_weight=2.0)
-    net_income:                 Field = Field(1, 2, period=576)
-    fcf:                        Field = Field(1, 2, period=576, loss_weight=2.5)
-    cash:                       Field = Field(1, 2, period=576)
-    total_debt:                 Field = Field(1, 2, period=576)
-    net_debt_to_ebitda:         Field = Field(1, 2, period=576, loss_weight=2.0)
-    interest_coverage:          Field = Field(1, 2, period=576, loss_weight=2.0)
-    covenant_headroom:          Field = Field(1, 2, period=576, loss_weight=3.0)
-    maturity_wall:              Field = Field(1, 2, period=576, loss_weight=2.5)
-    working_capital:            Field = Field(1, 2, period=576)
-    capex:                      Field = Field(1, 2, period=576)
-    share_count:                Field = Field(1, 1, period=576)
-    insider_transactions:       Field = Field(1, 2, period=192)
+    revenue:                    Field = Field(1, 2, period=QUARTERLY)
+    revenue_growth:             Field = Field(1, 2, period=QUARTERLY, loss_weight=2.0)
+    cogs:                       Field = Field(1, 2, period=QUARTERLY)
+    gross_margin:               Field = Field(1, 2, period=QUARTERLY, loss_weight=2.0)
+    opex:                       Field = Field(1, 2, period=QUARTERLY)
+    operating_margin:           Field = Field(1, 2, period=QUARTERLY, loss_weight=2.0)
+    net_income:                 Field = Field(1, 2, period=QUARTERLY)
+    fcf:                        Field = Field(1, 2, period=QUARTERLY, loss_weight=2.5)
+    cash:                       Field = Field(1, 2, period=QUARTERLY)
+    total_debt:                 Field = Field(1, 2, period=QUARTERLY)
+    net_debt_to_ebitda:         Field = Field(1, 2, period=QUARTERLY, loss_weight=2.0)
+    interest_coverage:          Field = Field(1, 2, period=QUARTERLY, loss_weight=2.0)
+    covenant_headroom:          Field = Field(1, 2, period=QUARTERLY, loss_weight=3.0)
+    maturity_wall:              Field = Field(1, 2, period=QUARTERLY, loss_weight=2.5)
+    working_capital:            Field = Field(1, 2, period=QUARTERLY)
+    capex:                      Field = Field(1, 2, period=QUARTERLY)
+    share_count:                Field = Field(1, 1, period=QUARTERLY)
+    insider_transactions:       Field = Field(1, 2, period=MONTHLY)
 
 
 @dataclass
 class FirmOperations:
-    capacity:                   Field = Field(1, 2, period=192)
-    utilization:                Field = Field(1, 2, period=192)
-    backlog:                    Field = Field(1, 2, period=192)
-    pricing_power:              Field = Field(1, 2, period=192, loss_weight=1.5)
-    customer_concentration:     Field = Field(1, 2, period=576)
-    supplier_concentration:     Field = Field(1, 2, period=576)
-    quality_incidents:          Field = Field(1, 2, period=192)
-    headcount:                  Field = Field(1, 2, period=576)
-    employee_satisfaction:      Field = Field(1, 2, period=576)
-    tech_debt:                  Field = Field(1, 2, period=576)
+    capacity:                   Field = Field(1, 2, period=MONTHLY)
+    utilization:                Field = Field(1, 2, period=MONTHLY)
+    backlog:                    Field = Field(1, 2, period=MONTHLY)
+    pricing_power:              Field = Field(1, 2, period=MONTHLY, loss_weight=1.5)
+    customer_concentration:     Field = Field(1, 2, period=QUARTERLY)
+    supplier_concentration:     Field = Field(1, 2, period=QUARTERLY)
+    quality_incidents:          Field = Field(1, 2, period=MONTHLY)
+    headcount:                  Field = Field(1, 2, period=QUARTERLY)
+    employee_satisfaction:      Field = Field(1, 2, period=QUARTERLY)
+    tech_debt:                  Field = Field(1, 2, period=QUARTERLY)
 
 
 @dataclass
 class FirmStrategy:
-    roadmap_clarity:            Field = Field(1, 2, period=576)
-    capex_plan:                 Field = Field(1, 2, period=576)
-    m_and_a_appetite:           Field = Field(1, 2, period=576)
-    geographic_expansion:       Field = Field(1, 2, period=576)
-    product_pipeline:           Field = Field(1, 4, period=576)
-    moat_durability:            Field = Field(1, 2, period=2304, loss_weight=2.0)
-    management_quality:         Field = Field(1, 2, period=576, loss_weight=2.0)
-    capital_allocation:         Field = Field(1, 2, period=576, loss_weight=2.0)
-    governance_quality:         Field = Field(1, 2, period=576)
-    esg_posture:                Field = Field(1, 2, period=576)
+    roadmap_clarity:            Field = Field(1, 2, period=QUARTERLY)
+    capex_plan:                 Field = Field(1, 2, period=QUARTERLY)
+    m_and_a_appetite:           Field = Field(1, 2, period=QUARTERLY)
+    geographic_expansion:       Field = Field(1, 2, period=QUARTERLY)
+    product_pipeline:           Field = Field(1, 4, period=QUARTERLY)
+    moat_durability:            Field = Field(1, 2, period=ANNUAL, loss_weight=2.0)
+    management_quality:         Field = Field(1, 2, period=QUARTERLY, loss_weight=2.0)
+    capital_allocation:         Field = Field(1, 2, period=QUARTERLY, loss_weight=2.0)
+    governance_quality:         Field = Field(1, 2, period=QUARTERLY)
+    esg_posture:                Field = Field(1, 2, period=QUARTERLY)
 
 
 @dataclass
 class FirmMarketPosition:
-    equity_price:               Field = Field(1, 2, period=1)
-    implied_vol:                Field = Field(1, 2, period=1)
-    credit_spread:              Field = Field(1, 2, period=1)
-    analyst_consensus:          Field = Field(1, 2, period=48)
-    short_interest:             Field = Field(1, 2, period=48)
-    institutional_ownership:    Field = Field(1, 2, period=576)
-    pe_ratio:                   Field = Field(1, 2, period=16)
-    ev_ebitda:                  Field = Field(1, 2, period=16)
+    equity_price:               Field = Field(1, 2, period=TICK)
+    implied_vol:                Field = Field(1, 2, period=TICK)
+    credit_spread:              Field = Field(1, 2, period=TICK)
+    analyst_consensus:          Field = Field(1, 2, period=WEEKLY)
+    short_interest:             Field = Field(1, 2, period=WEEKLY)
+    institutional_ownership:    Field = Field(1, 2, period=QUARTERLY)
+    pe_ratio:                   Field = Field(1, 2, period=DAILY)
+    ev_ebitda:                  Field = Field(1, 2, period=DAILY)
 
 
 @dataclass
 class FirmRisk:
-    regulatory_exposure:        Field = Field(1, 2, period=192)
-    litigation_risk:            Field = Field(1, 2, period=192)
-    cyber_vulnerability:        Field = Field(1, 2, period=192)
-    key_person_risk:            Field = Field(1, 2, period=576, loss_weight=2.0)
-    supply_chain_fragility:     Field = Field(1, 2, period=192)
-    geopolitical_exposure:      Field = Field(1, 2, period=192, loss_weight=1.5)
-    climate_transition_risk:    Field = Field(1, 2, period=2304)
-    tech_obsolescence:          Field = Field(1, 2, period=576, loss_weight=2.0)
+    regulatory_exposure:        Field = Field(1, 2, period=MONTHLY)
+    litigation_risk:            Field = Field(1, 2, period=MONTHLY)
+    cyber_vulnerability:        Field = Field(1, 2, period=MONTHLY)
+    key_person_risk:            Field = Field(1, 2, period=QUARTERLY, loss_weight=2.0)
+    supply_chain_fragility:     Field = Field(1, 2, period=MONTHLY)
+    geopolitical_exposure:      Field = Field(1, 2, period=MONTHLY, loss_weight=1.5)
+    climate_transition_risk:    Field = Field(1, 2, period=ANNUAL)
+    tech_obsolescence:          Field = Field(1, 2, period=QUARTERLY, loss_weight=2.0)
 
 
 @dataclass

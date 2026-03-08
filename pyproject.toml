@@ -47,12 +47,18 @@ train = [
 viz = [
     "matplotlib>=3.7",
 ]
+docs = [
+    "mkdocs>=1.5",
+    "mkdocs-material>=9.0",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "ruff>=0.1",
     "mypy>=1.0",
     "matplotlib>=3.7",
+    "mkdocs>=1.5",
+    "mkdocs-material>=9.0",
 ]
 all = [
     "general-unified-world-model[data,train,dev,viz]",
@@ -61,6 +67,7 @@ all = [
 [project.urls]
 Homepage = "https://github.com/JacobFV/general-unified-world-modeling"
 Repository = "https://github.com/JacobFV/general-unified-world-modeling"
+Documentation = "https://jacobfv.github.io/general-unified-world-modeling/"
 
 [tool.setuptools.packages.find]
 where = ["src"]

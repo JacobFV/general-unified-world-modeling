@@ -36,6 +36,9 @@ from general_unified_world_model.data.adapters import (
     YAHOO_COMMODITY_FIELDS,
     YAHOO_CRYPTO_FIELDS,
 )
+from general_unified_world_model.schema.temporal_constants import (
+    TICK, HOURLY, DAILY, WEEKLY, MONTHLY, QUARTERLY, ANNUAL, DECADAL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +190,7 @@ _FRED_PCT_SERIES = {
 
 # Additional FRED mappings not in adapters.py
 _EXTRA_FRED_MAPPINGS = {
-    "BAMLC0A0CM": ("financial.credit.ig_spread", 1, None),
+    "BAMLC0A0CM": ("financial.credit.ig_spread", TICK, None),
 }
 
 
@@ -301,7 +304,7 @@ class FREDCollector(BaseCollector):
         spec = DatasetSpec(
             name="FRED",
             mappings=field_mappings,
-            base_period=1,
+            base_period=TICK,
             weight=1.0,
         )
 
@@ -444,7 +447,7 @@ class YahooFinanceCollector(BaseCollector):
                     source_key=key,
                     target_field=target_field,
                     transform=None,  # already normalized
-                    frequency=1,     # daily
+                    frequency=TICK,     # daily
                 ))
 
                 logger.debug("[YahooFinance] %s -> %s (%d points)",
@@ -457,7 +460,7 @@ class YahooFinanceCollector(BaseCollector):
         spec = DatasetSpec(
             name="Yahoo Finance",
             mappings=field_mappings,
-            base_period=16,   # daily = period 16 in base ticks
+            base_period=DAILY,   # daily = period 16 in base ticks
             weight=1.0,
         )
 
@@ -471,84 +474,84 @@ class YahooFinanceCollector(BaseCollector):
 # that the data has realistic cross-field correlations.
 
 _MACRO_FIELDS = [
-    ("country_us.macro.output.gdp_nowcast", 16),
-    ("country_us.macro.output.industrial_production", 192),
-    ("country_us.macro.output.capacity_utilization", 192),
-    ("country_us.macro.output.retail_sales", 192),
-    ("country_us.macro.output.pmi_manufacturing", 192),
-    ("country_us.macro.output.pmi_services", 192),
-    ("country_us.macro.inflation.headline_cpi", 192),
-    ("country_us.macro.inflation.core_cpi", 192),
-    ("country_us.macro.inflation.pce_deflator", 192),
-    ("country_us.macro.inflation.wage_growth", 192),
-    ("country_us.macro.inflation.expectations_1y", 192),
-    ("country_us.macro.inflation.expectations_5y", 192),
-    ("country_us.macro.labor.unemployment_rate", 192),
-    ("country_us.macro.labor.nfp_change", 192),
-    ("country_us.macro.labor.initial_claims", 48),
-    ("country_us.macro.labor.job_openings", 192),
-    ("country_us.macro.labor.lfpr", 192),
-    ("country_us.macro.fiscal.debt_to_gdp", 576),
-    ("country_us.macro.fiscal.deficit_to_gdp", 576),
-    ("country_us.macro.housing.home_price_index", 192),
-    ("country_us.macro.housing.housing_starts", 192),
-    ("country_us.macro.housing.mortgage_rate", 16),
-    ("country_us.domestic_sentiment", 192),
+    ("country_us.macro.output.gdp_nowcast", DAILY),
+    ("country_us.macro.output.industrial_production", MONTHLY),
+    ("country_us.macro.output.capacity_utilization", MONTHLY),
+    ("country_us.macro.output.retail_sales", MONTHLY),
+    ("country_us.macro.output.pmi_manufacturing", MONTHLY),
+    ("country_us.macro.output.pmi_services", MONTHLY),
+    ("country_us.macro.inflation.headline_cpi", MONTHLY),
+    ("country_us.macro.inflation.core_cpi", MONTHLY),
+    ("country_us.macro.inflation.pce_deflator", MONTHLY),
+    ("country_us.macro.inflation.wage_growth", MONTHLY),
+    ("country_us.macro.inflation.expectations_1y", MONTHLY),
+    ("country_us.macro.inflation.expectations_5y", MONTHLY),
+    ("country_us.macro.labor.unemployment_rate", MONTHLY),
+    ("country_us.macro.labor.nfp_change", MONTHLY),
+    ("country_us.macro.labor.initial_claims", WEEKLY),
+    ("country_us.macro.labor.job_openings", MONTHLY),
+    ("country_us.macro.labor.lfpr", MONTHLY),
+    ("country_us.macro.fiscal.debt_to_gdp", QUARTERLY),
+    ("country_us.macro.fiscal.deficit_to_gdp", QUARTERLY),
+    ("country_us.macro.housing.home_price_index", MONTHLY),
+    ("country_us.macro.housing.housing_starts", MONTHLY),
+    ("country_us.macro.housing.mortgage_rate", DAILY),
+    ("country_us.domestic_sentiment", MONTHLY),
 ]
 
 _FINANCIAL_FIELDS = [
-    ("financial.yield_curves.short_rate", 1),
-    ("financial.yield_curves.two_year", 1),
-    ("financial.yield_curves.five_year", 1),
-    ("financial.yield_curves.ten_year", 1),
-    ("financial.yield_curves.thirty_year", 1),
-    ("financial.yield_curves.slope_2s10s", 1),
-    ("financial.yield_curves.breakeven_inflation", 1),
-    ("financial.credit.ig_spread", 1),
-    ("financial.credit.hy_spread", 1),
-    ("financial.equities.broad_indices", 1),
-    ("financial.equities.vix", 1),
-    ("financial.fx.dxy", 1),
-    ("financial.fx.eurusd", 1),
-    ("financial.fx.usdjpy", 1),
-    ("financial.liquidity.fed_reverse_repo", 16),
-    ("financial.liquidity.bank_reserves", 48),
-    ("financial.central_banks.policy_rate", 192),
-    ("financial.central_banks.balance_sheet_size", 48),
+    ("financial.yield_curves.short_rate", TICK),
+    ("financial.yield_curves.two_year", TICK),
+    ("financial.yield_curves.five_year", TICK),
+    ("financial.yield_curves.ten_year", TICK),
+    ("financial.yield_curves.thirty_year", TICK),
+    ("financial.yield_curves.slope_2s10s", TICK),
+    ("financial.yield_curves.breakeven_inflation", TICK),
+    ("financial.credit.ig_spread", TICK),
+    ("financial.credit.hy_spread", TICK),
+    ("financial.equities.broad_indices", TICK),
+    ("financial.equities.vix", TICK),
+    ("financial.fx.dxy", TICK),
+    ("financial.fx.eurusd", TICK),
+    ("financial.fx.usdjpy", TICK),
+    ("financial.liquidity.fed_reverse_repo", DAILY),
+    ("financial.liquidity.bank_reserves", WEEKLY),
+    ("financial.central_banks.policy_rate", MONTHLY),
+    ("financial.central_banks.balance_sheet_size", WEEKLY),
 ]
 
 _COMMODITY_FIELDS = [
-    ("resources.energy.crude_price", 1),
-    ("resources.energy.natgas_price", 1),
-    ("resources.metals.gold", 1),
-    ("resources.metals.silver", 1),
-    ("resources.metals.copper", 1),
+    ("resources.energy.crude_price", TICK),
+    ("resources.energy.natgas_price", TICK),
+    ("resources.metals.gold", TICK),
+    ("resources.metals.silver", TICK),
+    ("resources.metals.copper", TICK),
 ]
 
 _NARRATIVE_FIELDS = [
-    ("narratives.media.crisis_framing", 4),
-    ("narratives.media.econ_doom_vs_boom", 16),
-    ("narratives.media.geopolitical_fear", 16),
-    ("narratives.public.consumer_confidence", 192),
-    ("narratives.public.economic_anxiety", 48),
-    ("narratives.elites.ceo_confidence", 192),
-    ("narratives.positioning.equity_fund_flows", 48),
-    ("narratives.positioning.bond_fund_flows", 48),
-    ("narratives.positioning.retail_sentiment", 16),
+    ("narratives.media.crisis_framing", HOURLY),
+    ("narratives.media.econ_doom_vs_boom", DAILY),
+    ("narratives.media.geopolitical_fear", DAILY),
+    ("narratives.public.consumer_confidence", MONTHLY),
+    ("narratives.public.economic_anxiety", WEEKLY),
+    ("narratives.elites.ceo_confidence", MONTHLY),
+    ("narratives.positioning.equity_fund_flows", WEEKLY),
+    ("narratives.positioning.bond_fund_flows", WEEKLY),
+    ("narratives.positioning.retail_sentiment", DAILY),
 ]
 
 _REGIME_FIELDS = [
-    ("regime.growth_regime", 576),
-    ("regime.inflation_regime", 576),
-    ("regime.financial_cycle", 576),
-    ("regime.liquidity_regime", 192),
-    ("regime.fragility", 192),
-    ("regime.compressed_world_state", 192),
+    ("regime.growth_regime", QUARTERLY),
+    ("regime.inflation_regime", QUARTERLY),
+    ("regime.financial_cycle", QUARTERLY),
+    ("regime.liquidity_regime", MONTHLY),
+    ("regime.fragility", MONTHLY),
+    ("regime.compressed_world_state", MONTHLY),
 ]
 
 _EVENT_FIELDS = [
-    ("events.news_embedding", 1),
-    ("events.social_signal", 1),
+    ("events.news_embedding", TICK),
+    ("events.social_signal", TICK),
 ]
 
 
@@ -704,13 +707,822 @@ class SyntheticCollector(BaseCollector):
         spec = DatasetSpec(
             name="Synthetic",
             mappings=field_mappings,
-            base_period=1,
+            base_period=TICK,
             weight=0.5,  # lower weight -- it's synthetic
         )
 
         logger.info("[Synthetic] Generated %d series, %d timesteps each",
                      len(all_data), self.n_timesteps)
         return spec, all_data
+
+
+# ── World Bank Collector ──────────────────────────────────────────────────
+
+# World Bank indicator code -> (target_field_suffix, frequency)
+# The target_field will be prefixed with "country_{code}." at runtime.
+_WORLD_BANK_INDICATORS: dict[str, tuple[str, int]] = {
+    "NY.GDP.MKTP.KD.ZG": ("macro.output.gdp_nowcast", QUARTERLY),
+    "FP.CPI.TOTL.ZG":    ("macro.inflation.headline_cpi", QUARTERLY),
+    "SP.POP.TOTL":        ("demographics.population_growth", ANNUAL),
+    "SP.DYN.LE00.IN":     ("demographics.life_expectancy", ANNUAL),
+    "EN.ATM.CO2E.PC":     ("macro.trade.terms_of_trade", ANNUAL),  # proxy: CO2 per capita
+    "NE.TRD.GNFS.ZS":    ("macro.trade.trade_balance", QUARTERLY),
+    "BX.KLT.DINV.WD.GD.ZS": ("macro.trade.fdi_flows", ANNUAL),
+    "MS.MIL.XPND.GD.ZS": ("macro.fiscal.spending_composition", ANNUAL),
+    "IT.NET.USER.ZS":     ("demographics.education_attainment", ANNUAL),  # proxy: internet
+    "EG.FEC.RNEW.ZS":     ("macro.output.capacity_utilization", ANNUAL),  # proxy: renewables
+}
+
+# World Bank API country codes
+_WORLD_BANK_COUNTRIES = {
+    "US": "USA",
+    "CN": "CHN",
+    "EU": "EUU",  # European Union aggregate
+    "JP": "JPN",
+    "UK": "GBR",
+    "IN": "IND",
+    "BR": "BRA",
+}
+
+
+class WorldBankCollector(BaseCollector):
+    """Downloads macroeconomic data from the World Bank API.
+
+    The World Bank provides free access (no API key required) to a vast
+    collection of development indicators including GDP growth, inflation,
+    population, life expectancy, CO2 emissions, trade, FDI, military
+    spending, internet usage, and renewable energy shares.
+
+    Data is available at annual or quarterly frequency depending on the
+    indicator.  All series are z-score normalized.
+
+    Uses the v2 JSON API: ``api.worldbank.org/v2/country/{code}/indicator/{indicator}``
+    """
+
+    def __init__(
+        self,
+        countries: dict[str, str] | None = None,
+        indicators: dict[str, tuple[str, int]] | None = None,
+        start_year: int = 2000,
+        end_year: int | None = None,
+        cache_dir: str | Path | None = None,
+        force_refresh: bool = False,
+    ):
+        super().__init__(cache_dir=cache_dir, force_refresh=force_refresh)
+        self.countries = countries or _WORLD_BANK_COUNTRIES
+        self.indicators = indicators or _WORLD_BANK_INDICATORS
+        self.start_year = start_year
+        self.end_year = end_year
+
+    @property
+    def name(self) -> str:
+        return "WorldBank"
+
+    def _cache_params(self) -> dict:
+        return {
+            "countries": sorted(self.countries.keys()),
+            "indicators": sorted(self.indicators.keys()),
+            "start_year": self.start_year,
+            "end_year": self.end_year or "latest",
+        }
+
+    def _fetch(self) -> tuple[DatasetSpec, dict[str, torch.Tensor]]:
+        try:
+            import requests
+        except ImportError:
+            logger.warning("requests not installed. Install with: pip install requests")
+            return DatasetSpec(name=self.name, mappings=[]), {}
+
+        field_mappings: list[FieldMapping] = []
+        data_dict: dict[str, torch.Tensor] = {}
+
+        date_range = f"{self.start_year}:{self.end_year or 2026}"
+
+        for country_key, wb_code in self.countries.items():
+            country_prefix = f"country_{country_key.lower()}"
+
+            for indicator_code, (field_suffix, frequency) in self.indicators.items():
+                source_key = f"wb_{country_key}_{indicator_code}"
+                target_field = f"{country_prefix}.{field_suffix}"
+
+                try:
+                    url = (
+                        f"https://api.worldbank.org/v2/country/{wb_code}"
+                        f"/indicator/{indicator_code}"
+                    )
+                    params = {
+                        "format": "json",
+                        "date": date_range,
+                        "per_page": 500,
+                    }
+                    logger.debug("[WorldBank] Fetching %s for %s", indicator_code, wb_code)
+                    resp = requests.get(url, params=params, timeout=30)
+                    resp.raise_for_status()
+
+                    payload = resp.json()
+                    # World Bank returns [metadata, data_array]
+                    if (
+                        not isinstance(payload, list)
+                        or len(payload) < 2
+                        or payload[1] is None
+                    ):
+                        logger.debug(
+                            "[WorldBank] No data for %s / %s", wb_code, indicator_code
+                        )
+                        continue
+
+                    records = payload[1]
+                    # Filter out null values and sort by year ascending
+                    valid = [
+                        (int(r["date"]), float(r["value"]))
+                        for r in records
+                        if r.get("value") is not None
+                    ]
+                    if not valid:
+                        continue
+
+                    valid.sort(key=lambda x: x[0])
+                    values = [v for _, v in valid]
+
+                    raw = torch.tensor(values, dtype=torch.float32)
+                    normalized, _, _ = _zscore_tensor(raw)
+
+                    data_dict[source_key] = normalized
+                    field_mappings.append(FieldMapping(
+                        source_key=source_key,
+                        target_field=target_field,
+                        transform=None,
+                        frequency=frequency,
+                    ))
+
+                    logger.debug(
+                        "[WorldBank] %s -> %s (%d points)",
+                        source_key, target_field, len(normalized),
+                    )
+
+                except Exception as exc:
+                    logger.debug(
+                        "[WorldBank] Failed %s / %s: %s",
+                        wb_code, indicator_code, exc,
+                    )
+                    continue
+
+        spec = DatasetSpec(
+            name="World Bank",
+            mappings=field_mappings,
+            base_period=ANNUAL,
+            weight=0.8,
+        )
+
+        return spec, data_dict
+
+
+# ── NOAA Climate Collector ───────────────────────────────────────────────
+
+# NOAA CDO dataset IDs and the world model fields they map to.
+_NOAA_DATASETS: list[tuple[str, str, str, int]] = [
+    # (dataset_id, data_type_id, target_field, frequency)
+    ("GSOM", "TAVG", "physical.climate.global_temp_anomaly", ANNUAL),
+    ("GSOM", "PRCP", "physical.climate.extreme_weather_freq", QUARTERLY),
+]
+
+
+class NOAAClimateCollector(BaseCollector):
+    """Downloads climate data from the NOAA Climate Data Online API.
+
+    Provides global temperature anomaly, precipitation patterns, and
+    other climate observations.  Requires a free NOAA API key
+    (https://www.ncdc.noaa.gov/cdo-web/token).
+
+    If the API key is not available, the collector gracefully returns
+    empty results without raising an error.
+
+    Uses the CDO v2 API: ``https://www.ncdc.noaa.gov/cdo-web/api/v2/``
+    """
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        start_date: str = "2000-01-01",
+        end_date: str | None = None,
+        cache_dir: str | Path | None = None,
+        force_refresh: bool = False,
+    ):
+        super().__init__(cache_dir=cache_dir, force_refresh=force_refresh)
+        self.api_key = api_key or os.environ.get("NOAA_API_KEY")
+        self.start_date = start_date
+        self.end_date = end_date
+
+    @property
+    def name(self) -> str:
+        return "NOAAClimate"
+
+    def _cache_params(self) -> dict:
+        return {
+            "start_date": self.start_date,
+            "end_date": self.end_date or "latest",
+        }
+
+    def _fetch(self) -> tuple[DatasetSpec, dict[str, torch.Tensor]]:
+        try:
+            import requests
+        except ImportError:
+            logger.warning("requests not installed. Install with: pip install requests")
+            return DatasetSpec(name=self.name, mappings=[]), {}
+
+        if not self.api_key:
+            logger.warning(
+                "No NOAA API key. Set NOAA_API_KEY env var or pass api_key. "
+                "Get a free key at https://www.ncdc.noaa.gov/cdo-web/token"
+            )
+            return DatasetSpec(name=self.name, mappings=[]), {}
+
+        field_mappings: list[FieldMapping] = []
+        data_dict: dict[str, torch.Tensor] = {}
+
+        headers = {"token": self.api_key}
+        base_url = "https://www.ncdc.noaa.gov/cdo-web/api/v2/data"
+
+        for dataset_id, datatype_id, target_field, frequency in _NOAA_DATASETS:
+            source_key = f"noaa_{dataset_id}_{datatype_id}"
+
+            try:
+                params = {
+                    "datasetid": dataset_id,
+                    "datatypeid": datatype_id,
+                    "startdate": self.start_date,
+                    "enddate": self.end_date or "2026-01-01",
+                    "units": "metric",
+                    "limit": 1000,
+                    "sortfield": "date",
+                    "sortorder": "asc",
+                    # Use GHCND:USW00094728 (NYC Central Park) as a representative
+                    # station for global trends when no station is specified
+                    "locationid": "FIPS:US",
+                }
+
+                logger.debug("[NOAA] Fetching %s / %s", dataset_id, datatype_id)
+                resp = requests.get(
+                    base_url, headers=headers, params=params, timeout=30
+                )
+                resp.raise_for_status()
+
+                payload = resp.json()
+                results = payload.get("results", [])
+                if not results:
+                    logger.debug("[NOAA] No results for %s / %s", dataset_id, datatype_id)
+                    continue
+
+                # Aggregate by year-month, taking the mean of all stations
+                from collections import defaultdict
+
+                monthly: dict[str, list[float]] = defaultdict(list)
+                for record in results:
+                    date_key = record["date"][:7]  # YYYY-MM
+                    monthly[date_key].append(float(record["value"]))
+
+                sorted_months = sorted(monthly.keys())
+                values = [
+                    sum(monthly[m]) / len(monthly[m]) for m in sorted_months
+                ]
+
+                if not values:
+                    continue
+
+                raw = torch.tensor(values, dtype=torch.float32)
+                normalized, _, _ = _zscore_tensor(raw)
+
+                data_dict[source_key] = normalized
+                field_mappings.append(FieldMapping(
+                    source_key=source_key,
+                    target_field=target_field,
+                    transform=None,
+                    frequency=frequency,
+                ))
+
+                logger.debug(
+                    "[NOAA] %s -> %s (%d points)",
+                    source_key, target_field, len(normalized),
+                )
+
+            except Exception as exc:
+                logger.debug(
+                    "[NOAA] Failed %s / %s: %s", dataset_id, datatype_id, exc
+                )
+                continue
+
+        # Additionally, try fetching CO2 and sea level data from public
+        # NOAA sources (these use different endpoints and need no CDO key,
+        # but we attempt them only when the CDO key is valid to keep the
+        # collector consistent).
+        self._fetch_co2(data_dict, field_mappings)
+        self._fetch_sea_level(data_dict, field_mappings)
+
+        spec = DatasetSpec(
+            name="NOAA Climate",
+            mappings=field_mappings,
+            base_period=ANNUAL,
+            weight=0.6,
+        )
+
+        return spec, data_dict
+
+    def _fetch_co2(
+        self,
+        data_dict: dict[str, torch.Tensor],
+        field_mappings: list[FieldMapping],
+    ) -> None:
+        """Fetch Mauna Loa CO2 data from NOAA GML (public, no key)."""
+        try:
+            import requests
+
+            url = (
+                "https://gml.noaa.gov/webdata/ccgg/trends/co2/"
+                "co2_annmean_mlo.csv"
+            )
+            resp = requests.get(url, timeout=30)
+            resp.raise_for_status()
+
+            lines = resp.text.strip().split("\n")
+            values = []
+            for line in lines:
+                if line.startswith("#") or not line.strip():
+                    continue
+                parts = line.split(",")
+                if len(parts) >= 2:
+                    try:
+                        year = int(parts[0].strip())
+                        co2 = float(parts[1].strip())
+                        min_year = int(self.start_date.split("-")[0])
+                        if year >= min_year:
+                            values.append(co2)
+                    except (ValueError, IndexError):
+                        continue
+
+            if values:
+                raw = torch.tensor(values, dtype=torch.float32)
+                normalized, _, _ = _zscore_tensor(raw)
+                data_dict["noaa_co2_annual"] = normalized
+                field_mappings.append(FieldMapping(
+                    source_key="noaa_co2_annual",
+                    target_field="physical.climate.carbon_ppm",
+                    transform=None,
+                    frequency=ANNUAL,
+                ))
+                logger.debug("[NOAA] CO2 annual: %d points", len(normalized))
+
+        except Exception as exc:
+            logger.debug("[NOAA] Failed to fetch CO2 data: %s", exc)
+
+    def _fetch_sea_level(
+        self,
+        data_dict: dict[str, torch.Tensor],
+        field_mappings: list[FieldMapping],
+    ) -> None:
+        """Fetch global mean sea level data from NOAA (public, no key)."""
+        try:
+            import requests
+
+            # NOAA Laboratory for Satellite Altimetry — global MSL
+            url = (
+                "https://www.star.nesdis.noaa.gov/socd/lsa/SeaLevelRise/"
+                "slr/slr_sla_gbl_free_all_66.csv"
+            )
+            resp = requests.get(url, timeout=30)
+            resp.raise_for_status()
+
+            lines = resp.text.strip().split("\n")
+            values = []
+            for line in lines:
+                if line.startswith("#") or line.startswith("year") or not line.strip():
+                    continue
+                parts = line.split(",")
+                if len(parts) >= 2:
+                    try:
+                        values.append(float(parts[1].strip()))
+                    except (ValueError, IndexError):
+                        continue
+
+            if values:
+                # Subsample to annual means if we have many data points
+                if len(values) > 100:
+                    chunk_size = max(1, len(values) // (len(values) // 12))
+                    annual_means = []
+                    for i in range(0, len(values), chunk_size):
+                        chunk = values[i : i + chunk_size]
+                        annual_means.append(sum(chunk) / len(chunk))
+                    values = annual_means
+
+                raw = torch.tensor(values, dtype=torch.float32)
+                normalized, _, _ = _zscore_tensor(raw)
+                data_dict["noaa_sea_level"] = normalized
+                field_mappings.append(FieldMapping(
+                    source_key="noaa_sea_level",
+                    target_field="physical.climate.sea_level_trend",
+                    transform=None,
+                    frequency=ANNUAL,
+                ))
+                logger.debug("[NOAA] Sea level: %d points", len(normalized))
+
+        except Exception as exc:
+            logger.debug("[NOAA] Failed to fetch sea level data: %s", exc)
+
+
+# ── IMF Collector ────────────────────────────────────────────────────────
+
+# IMF SDMX dataset codes and their indicators.
+# Format: (database_id, indicator_ref, target_field, frequency)
+_IMF_INDICATORS: list[tuple[str, str, str, int]] = [
+    # World Economic Outlook
+    ("WEO", "NGDP_RPCH", "forecasts.macro.gdp_growth_12m", QUARTERLY),
+    ("WEO", "PCPIPCH", "forecasts.macro.inflation_path_12m", QUARTERLY),
+    ("WEO", "BCA_NGDPD", "country_us.macro.trade.current_account", QUARTERLY),
+    # Primary Commodity Price System
+    ("PCPS", "POILAPSP", "resources.energy.crude_price", MONTHLY),
+    ("PCPS", "PNGAS", "resources.energy.natgas_price", MONTHLY),
+    ("PCPS", "PGOLD", "resources.metals.gold", MONTHLY),
+    ("PCPS", "PCOPP", "resources.metals.copper", MONTHLY),
+    ("PCPS", "PALUM", "resources.metals.aluminum", MONTHLY),
+    ("PCPS", "PNICK", "resources.metals.nickel", MONTHLY),
+    ("PCPS", "PWHEAMT", "resources.food.wheat", MONTHLY),
+    ("PCPS", "PMAIZMT", "resources.food.corn", MONTHLY),
+]
+
+
+class IMFCollector(BaseCollector):
+    """Downloads data from the IMF JSON REST API.
+
+    Provides World Economic Outlook (WEO) forecasts and Primary Commodity
+    Price System (PCPS) data.  The API is free and requires no key.
+
+    - WEO: GDP growth forecasts, inflation forecasts, current account
+    - PCPS: Crude oil, natural gas, gold, copper, aluminum, wheat, corn
+
+    All series are z-score normalized.
+
+    Uses the SDMX JSON API: ``http://dataservices.imf.org/REST/SDMX_JSON.svc/``
+    """
+
+    def __init__(
+        self,
+        indicators: list[tuple[str, str, str, int]] | None = None,
+        start_year: int = 2000,
+        end_year: int | None = None,
+        cache_dir: str | Path | None = None,
+        force_refresh: bool = False,
+    ):
+        super().__init__(cache_dir=cache_dir, force_refresh=force_refresh)
+        self.indicators = indicators or _IMF_INDICATORS
+        self.start_year = start_year
+        self.end_year = end_year
+
+    @property
+    def name(self) -> str:
+        return "IMF"
+
+    def _cache_params(self) -> dict:
+        return {
+            "indicators": [
+                f"{db}.{ind}" for db, ind, _, _ in self.indicators
+            ],
+            "start_year": self.start_year,
+            "end_year": self.end_year or "latest",
+        }
+
+    def _fetch(self) -> tuple[DatasetSpec, dict[str, torch.Tensor]]:
+        try:
+            import requests
+        except ImportError:
+            logger.warning("requests not installed. Install with: pip install requests")
+            return DatasetSpec(name=self.name, mappings=[]), {}
+
+        field_mappings: list[FieldMapping] = []
+        data_dict: dict[str, torch.Tensor] = {}
+
+        base_url = "http://dataservices.imf.org/REST/SDMX_JSON.svc"
+
+        for database_id, indicator_ref, target_field, frequency in self.indicators:
+            source_key = f"imf_{database_id}_{indicator_ref}"
+
+            try:
+                # Build the compact data request URL.
+                # For PCPS: CompactData/PCPS/M..PCOPP
+                # For WEO: CompactData/WEO/...
+                if database_id == "PCPS":
+                    # PCPS uses monthly frequency code "M" and a wildcard country
+                    dimension_string = f"M..{indicator_ref}"
+                else:
+                    # WEO: annual data, US as reference country
+                    dimension_string = f"A.US.{indicator_ref}"
+
+                url = f"{base_url}/CompactData/{database_id}/{dimension_string}"
+                params = {
+                    "startPeriod": str(self.start_year),
+                    "endPeriod": str(self.end_year or 2026),
+                }
+
+                logger.debug("[IMF] Fetching %s / %s", database_id, indicator_ref)
+                resp = requests.get(url, params=params, timeout=60)
+                resp.raise_for_status()
+
+                payload = resp.json()
+
+                # Navigate the SDMX JSON structure to extract observations
+                values = self._extract_observations(payload, database_id)
+
+                if not values:
+                    logger.debug(
+                        "[IMF] No observations for %s / %s",
+                        database_id, indicator_ref,
+                    )
+                    continue
+
+                raw = torch.tensor(values, dtype=torch.float32)
+
+                # Commodity prices: use log returns then z-score
+                if database_id == "PCPS":
+                    log_ret = _log_returns_tensor(raw)
+                    normalized, _, _ = _zscore_tensor(log_ret)
+                else:
+                    normalized, _, _ = _zscore_tensor(raw)
+
+                data_dict[source_key] = normalized
+                field_mappings.append(FieldMapping(
+                    source_key=source_key,
+                    target_field=target_field,
+                    transform=None,
+                    frequency=frequency,
+                ))
+
+                logger.debug(
+                    "[IMF] %s -> %s (%d points)",
+                    source_key, target_field, len(normalized),
+                )
+
+            except Exception as exc:
+                logger.debug(
+                    "[IMF] Failed %s / %s: %s", database_id, indicator_ref, exc
+                )
+                continue
+
+        spec = DatasetSpec(
+            name="IMF",
+            mappings=field_mappings,
+            base_period=QUARTERLY,
+            weight=0.8,
+        )
+
+        return spec, data_dict
+
+    @staticmethod
+    def _extract_observations(
+        payload: dict, database_id: str
+    ) -> list[float]:
+        """Extract time-series values from the SDMX JSON response.
+
+        The IMF SDMX JSON structure is:
+        ``CompactData -> DataSet -> Series -> Obs``
+        where ``Series`` can be a dict (single series) or list (multiple).
+        Each ``Obs`` has ``@OBS_VALUE`` and a time period key.
+
+        When multiple series are returned (e.g., multiple countries for PCPS),
+        we take the first series as a representative.
+        """
+        try:
+            dataset = payload.get("CompactData", {}).get("DataSet", {})
+            series = dataset.get("Series", {})
+
+            # Multiple series -> take the first
+            if isinstance(series, list):
+                series = series[0] if series else {}
+
+            obs = series.get("Obs", [])
+            if isinstance(obs, dict):
+                obs = [obs]
+
+            values: list[float] = []
+            for ob in obs:
+                val = ob.get("@OBS_VALUE")
+                if val is not None:
+                    try:
+                        values.append(float(val))
+                    except (ValueError, TypeError):
+                        continue
+
+            return values
+        except (AttributeError, KeyError, TypeError):
+            return []
+
+
+# ── BIS Collector ────────────────────────────────────────────────────────
+
+# BIS dataset keys and their indicators.
+# Format: (dataset_key, series_key_pattern, target_field, frequency)
+# The BIS API uses SDMX-like REST: https://stats.bis.org/api/v1/
+_BIS_DATASETS: list[tuple[str, str, str, str, int]] = [
+    # Credit-to-GDP ratio (US)
+    (
+        "TOTAL_CREDIT",
+        "Q.US.P.A.M.770.A",
+        "credit_gdp_us",
+        "financial.credit.credit_impulse",
+        QUARTERLY,
+    ),
+    # Residential property prices (US)
+    (
+        "SELECTED_PP",
+        "Q.US.R.628",
+        "property_us",
+        "country_us.macro.housing.home_price_index",
+        QUARTERLY,
+    ),
+    # Residential property prices (CN)
+    (
+        "SELECTED_PP",
+        "Q.CN.R.628",
+        "property_cn",
+        "country_cn.macro.housing.home_price_index",
+        QUARTERLY,
+    ),
+    # Residential property prices (JP)
+    (
+        "SELECTED_PP",
+        "Q.JP.R.628",
+        "property_jp",
+        "country_jp.macro.housing.home_price_index",
+        QUARTERLY,
+    ),
+    # Effective exchange rates — US broad
+    (
+        "EER",
+        "M.US.R.B",
+        "eer_us",
+        "financial.fx.dxy",
+        MONTHLY,
+    ),
+    # Debt securities outstanding — total
+    (
+        "DEBT_SEC2",
+        "Q.US.1A.1.TO1.A.A.A.TO1.A.I",
+        "debt_sec_us",
+        "financial.credit.private_credit_growth",
+        QUARTERLY,
+    ),
+]
+
+
+class BISCollector(BaseCollector):
+    """Downloads data from the Bank for International Settlements statistics API.
+
+    The BIS provides free access (no API key needed) to statistics on:
+    - Credit-to-GDP ratios
+    - Residential property prices
+    - Effective exchange rates
+    - Debt securities outstanding
+
+    All series are z-score normalized.
+
+    Uses the BIS API: ``https://stats.bis.org/api/v1/``
+    """
+
+    def __init__(
+        self,
+        datasets: list[tuple[str, str, str, str, int]] | None = None,
+        start_period: str = "2000-Q1",
+        end_period: str | None = None,
+        cache_dir: str | Path | None = None,
+        force_refresh: bool = False,
+    ):
+        super().__init__(cache_dir=cache_dir, force_refresh=force_refresh)
+        self.datasets = datasets or _BIS_DATASETS
+        self.start_period = start_period
+        self.end_period = end_period
+
+    @property
+    def name(self) -> str:
+        return "BIS"
+
+    def _cache_params(self) -> dict:
+        return {
+            "datasets": [
+                f"{ds[0]}.{ds[1]}" for ds in self.datasets
+            ],
+            "start_period": self.start_period,
+            "end_period": self.end_period or "latest",
+        }
+
+    def _fetch(self) -> tuple[DatasetSpec, dict[str, torch.Tensor]]:
+        try:
+            import requests
+        except ImportError:
+            logger.warning("requests not installed. Install with: pip install requests")
+            return DatasetSpec(name=self.name, mappings=[]), {}
+
+        field_mappings: list[FieldMapping] = []
+        data_dict: dict[str, torch.Tensor] = {}
+
+        base_url = "https://stats.bis.org/api/v1"
+
+        for dataset_key, series_key, source_key, target_field, frequency in self.datasets:
+            full_source_key = f"bis_{source_key}"
+
+            try:
+                # BIS uses SDMX REST: /data/{flow}/{key}
+                url = f"{base_url}/data/{dataset_key}/{series_key}"
+                params: dict[str, str] = {
+                    "format": "json",
+                    "startPeriod": self.start_period.replace("-Q", "-Q"),
+                }
+                if self.end_period:
+                    params["endPeriod"] = self.end_period
+
+                logger.debug("[BIS] Fetching %s / %s", dataset_key, series_key)
+                resp = requests.get(url, params=params, timeout=60)
+                resp.raise_for_status()
+
+                payload = resp.json()
+                values = self._extract_sdmx_values(payload)
+
+                if not values:
+                    logger.debug(
+                        "[BIS] No observations for %s / %s",
+                        dataset_key, series_key,
+                    )
+                    continue
+
+                raw = torch.tensor(values, dtype=torch.float32)
+
+                # Property prices and exchange rates: pct change then z-score
+                if "property" in source_key or "eer" in source_key:
+                    transformed = _pct_change_tensor(raw)
+                    normalized, _, _ = _zscore_tensor(transformed)
+                else:
+                    normalized, _, _ = _zscore_tensor(raw)
+
+                data_dict[full_source_key] = normalized
+                field_mappings.append(FieldMapping(
+                    source_key=full_source_key,
+                    target_field=target_field,
+                    transform=None,
+                    frequency=frequency,
+                ))
+
+                logger.debug(
+                    "[BIS] %s -> %s (%d points)",
+                    full_source_key, target_field, len(normalized),
+                )
+
+            except Exception as exc:
+                logger.debug(
+                    "[BIS] Failed %s / %s: %s", dataset_key, series_key, exc
+                )
+                continue
+
+        spec = DatasetSpec(
+            name="BIS",
+            mappings=field_mappings,
+            base_period=QUARTERLY,
+            weight=0.7,
+        )
+
+        return spec, data_dict
+
+    @staticmethod
+    def _extract_sdmx_values(payload: dict) -> list[float]:
+        """Extract observation values from a BIS SDMX JSON response.
+
+        The BIS SDMX-JSON format stores observations indexed by position:
+        ``dataSets[0].series["0:0:..."].observations["0"] -> [value]``
+
+        Observations are keyed by their time-dimension position (as strings),
+        and we sort by that position to get chronological order.
+        """
+        try:
+            data_sets = payload.get("dataSets", [])
+            if not data_sets:
+                return []
+
+            series_dict = data_sets[0].get("series", {})
+            if not series_dict:
+                return []
+
+            # Take the first series available
+            first_series = next(iter(series_dict.values()))
+            observations = first_series.get("observations", {})
+
+            # Sort by time position key (string ints) and extract values
+            sorted_obs = sorted(observations.items(), key=lambda x: int(x[0]))
+            values: list[float] = []
+            for _, obs_array in sorted_obs:
+                if isinstance(obs_array, list) and obs_array:
+                    try:
+                        values.append(float(obs_array[0]))
+                    except (ValueError, TypeError, IndexError):
+                        continue
+
+            return values
+        except (StopIteration, AttributeError, KeyError, TypeError):
+            return []
 
 
 # ── Convenience function ─────────────────────────────────────────────────
@@ -734,6 +1546,7 @@ def collect_all(
     Args:
         api_keys: Dict of API keys. Recognized keys:
             - ``"fred"``: FRED API key
+            - ``"noaa"``: NOAA Climate Data Online API key
         start_date: Start date for historical data (YYYY-MM-DD).
         end_date: End date (None = today).
         firm_tickers: Dict mapping ticker symbols to world model firm
@@ -748,6 +1561,9 @@ def collect_all(
     """
     api_keys = api_keys or {}
     results: list[tuple[DatasetSpec, dict[str, torch.Tensor]]] = []
+
+    # Extract start year from start_date for collectors that use year params
+    start_year = int(start_date.split("-")[0]) if start_date else 2000
 
     # 1. FRED Collector
     logger.info("Running FREDCollector...")
@@ -779,7 +1595,61 @@ def collect_all(
     else:
         logger.info("YahooFinanceCollector returned no data (missing yfinance?)")
 
-    # 3. Synthetic Collector (always available)
+    # 3. World Bank Collector
+    logger.info("Running WorldBankCollector...")
+    world_bank = WorldBankCollector(
+        start_year=start_year,
+        cache_dir=cache_dir,
+        force_refresh=force_refresh,
+    )
+    spec, data = world_bank.collect()
+    if data:
+        results.append((spec, data))
+    else:
+        logger.info("WorldBankCollector returned no data")
+
+    # 4. NOAA Climate Collector
+    logger.info("Running NOAAClimateCollector...")
+    noaa = NOAAClimateCollector(
+        api_key=api_keys.get("noaa"),
+        start_date=start_date,
+        end_date=end_date,
+        cache_dir=cache_dir,
+        force_refresh=force_refresh,
+    )
+    spec, data = noaa.collect()
+    if data:
+        results.append((spec, data))
+    else:
+        logger.info("NOAAClimateCollector returned no data (missing NOAA API key?)")
+
+    # 5. IMF Collector
+    logger.info("Running IMFCollector...")
+    imf = IMFCollector(
+        start_year=start_year,
+        cache_dir=cache_dir,
+        force_refresh=force_refresh,
+    )
+    spec, data = imf.collect()
+    if data:
+        results.append((spec, data))
+    else:
+        logger.info("IMFCollector returned no data")
+
+    # 6. BIS Collector
+    logger.info("Running BISCollector...")
+    bis = BISCollector(
+        start_period=f"{start_year}-Q1",
+        cache_dir=cache_dir,
+        force_refresh=force_refresh,
+    )
+    spec, data = bis.collect()
+    if data:
+        results.append((spec, data))
+    else:
+        logger.info("BISCollector returned no data")
+
+    # 7. Synthetic Collector (always available)
     if include_synthetic:
         logger.info("Running SyntheticCollector...")
         synth = SyntheticCollector(
