@@ -10,12 +10,16 @@ from general_unified_world_model import WorldProjection, project
 from general_unified_world_model.rendering import (
     CanvasHeatmapRenderer,
     TopologyGraphRenderer,
+    CausalGraphRenderer,
     FinancialChartRenderer,
     GeopoliticalMapRenderer,
     RegimeDashboardRenderer,
     SocialGraphRenderer,
     RenderContext,
     render,
+    render_ceo_use_case,
+    render_government_use_case,
+    render_agent_use_case,
 )
 
 
@@ -132,6 +136,33 @@ class TestSocialGraph:
 
     def test_renders_without_people(self, financial_ctx):
         r = SocialGraphRenderer()
+        fig = r.render(financial_ctx)
+        assert fig is not None
+        import matplotlib.pyplot as plt
+        plt.close(fig)
+
+
+class TestCausalGraph:
+    def test_renders_ceo(self):
+        fig = render_ceo_use_case()
+        assert fig is not None
+        import matplotlib.pyplot as plt
+        plt.close(fig)
+
+    def test_renders_government(self):
+        fig = render_government_use_case()
+        assert fig is not None
+        import matplotlib.pyplot as plt
+        plt.close(fig)
+
+    def test_renders_agent(self):
+        fig = render_agent_use_case()
+        assert fig is not None
+        import matplotlib.pyplot as plt
+        plt.close(fig)
+
+    def test_renders_from_schema(self, financial_ctx):
+        r = CausalGraphRenderer()
         fig = r.render(financial_ctx)
         assert fig is not None
         import matplotlib.pyplot as plt
