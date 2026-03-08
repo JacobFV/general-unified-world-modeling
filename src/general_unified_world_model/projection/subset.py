@@ -318,59 +318,6 @@ class WorldProjection:
     temporal_start: dict[str, int] = dc_field(default_factory=dict)
 
 
-def _collect_field_dims(obj, prefix: str = "") -> list[tuple[int, int]]:
-    """Walk a dataclass and collect (h, w) of all Field instances."""
-    if isinstance(obj, Field):
-        return [(obj.h, obj.w)]
-    if not dataclasses.is_dataclass(obj):
-        return []
-    dims = []
-    for f in dataclasses.fields(type(obj)):
-        dims.extend(_collect_field_dims(getattr(obj, f.name), f"{prefix}.{f.name}"))
-    return dims
-
-
-def auto_canvas_size(obj, pad: float = 1.15) -> tuple[int, int]:
-    """Compute minimum (H, W) that can pack all fields in an object.
-
-    Uses the same strip-packing logic as compile_schema: fields placed
-    left-to-right, top-to-bottom. Computes the smallest square-ish grid
-    that fits everything, with a small padding factor.
-
-    Args:
-        obj: Dataclass with Field attributes.
-        pad: Padding factor (1.15 = 15% slack for layout flexibility).
-
-    Returns:
-        (H, W) tuple.
-    """
-    dims = _collect_field_dims(obj)
-    if not dims:
-        return (4, 4)
-
-    max_w = max(w for _, w in dims)
-    max_h = max(h for h, _ in dims)
-    total_area = sum(h * w for h, w in dims)
-
-    import math
-    side = int(math.ceil(math.sqrt(total_area * pad)))
-    W = max(side, max_w)
-    # Simulate strip packing to find needed H
-    row_h = 0
-    row_w = 0
-    row_max_h = 0
-    for h, w in dims:
-        if row_w + w > W:
-            row_h += row_max_h
-            row_w = 0
-            row_max_h = 0
-        row_w += w
-        row_max_h = max(row_max_h, h)
-    needed_H = row_h + row_max_h
-    H = max(int(math.ceil(needed_H * pad)), max_h)
-    return (H, W)
-
-
 def project(
     proj: WorldProjection,
     T: int = 1,
@@ -385,8 +332,8 @@ def project(
     This is the main entry point. Declare what you care about,
     get a compiled canvas ready for training.
 
-    Canvas dimensions (H, W) are auto-computed from the projected fields
-    when not specified — like a C compiler allocating struct memory.
+    Canvas dimensions (H, W) are auto-computed by compile_schema when
+    not specified — like a C compiler allocating struct memory.
     Override H, W only when you need a specific grid size.
 
     Excluded sub-types within included parents are automatically
@@ -395,10 +342,14 @@ def project(
     but coarse-grain politics, demographics, etc. to single positions.
     Their field names stay the same, so weights transfer across projections.
 
+    Uses bottleneck connectivity by default: each nested sub-type gets a
+    1×1 gateway field. Cross-level attention routes through gateways,
+    making hierarchical interactions O(1) per entity.
+
     Args:
         proj: WorldProjection declaring the subset.
         T: Temporal extent.
-        H, W: Canvas grid dimensions. None = auto-sized from field dims.
+        H, W: Canvas grid dimensions. None = auto-sized by compile_schema.
         d_model: Latent dimensionality per position.
         connectivity: Override connectivity policy.
         t_current: Timestep boundary for output mask.
@@ -425,15 +376,9 @@ def project(
         extra_supply_chains, extra_countries,
     )
 
-    # Auto-size canvas if H, W not specified
-    if H is None or W is None:
-        auto_H, auto_W = auto_canvas_size(projected)
-        H = H or auto_H
-        W = W or auto_W
-
     conn = connectivity or proj.connectivity or ConnectivityPolicy(
         intra="dense",
-        parent_child="hub_spoke",
+        parent_child="bottleneck",
         array_element="ring",
         temporal="dense",
     )

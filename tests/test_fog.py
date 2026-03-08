@@ -31,17 +31,19 @@ class TestCoarseGrainProjection:
         """Full path include should produce no coarse-grained fields."""
         proj = WorldProjection(include=["financial"])
         bound = project(proj, T=1, H=32, W=32, d_model=32)
-        # All 7 sub-types should be fully expanded
-        yc_fields = [n for n in bound.field_names if "yield_curves" in n]
-        assert len(yc_fields) == 10  # all 10 YieldCurveState fields
+        # All 10 YieldCurveState leaf fields plus 1 gateway
+        yc_leaf_fields = [n for n in bound.field_names
+                          if n.startswith("financial.yield_curves.")]
+        assert len(yc_leaf_fields) == 10
 
     def test_sub_path_coarse_grains_siblings(self):
         """Sub-path include should coarse-grain excluded siblings."""
         proj = WorldProjection(include=["financial.yield_curves", "regime"])
         bound = project(proj, T=1, H=32, W=32, d_model=32)
-        # yield_curves should be fully expanded (10 fields)
-        yc_fields = [n for n in bound.field_names if "yield_curves" in n]
-        assert len(yc_fields) == 10
+        # yield_curves should be fully expanded (10 leaf fields)
+        yc_leaf_fields = [n for n in bound.field_names
+                          if n.startswith("financial.yield_curves.")]
+        assert len(yc_leaf_fields) == 10
         # Siblings should be coarse-grained to single fields
         assert "financial.credit" in bound.field_names
         assert "financial.fx" in bound.field_names
@@ -94,9 +96,10 @@ class TestCoarseGrainProjection:
         """Wildcard include should never coarse-grain."""
         proj = WorldProjection(include=["*"])
         bound = project(proj, T=1, H=128, W=128, d_model=32)
-        # Should have fully expanded sub-types, not single fields
-        yc_fields = [n for n in bound.field_names if "yield_curves" in n]
-        assert len(yc_fields) == 10
+        # Should have fully expanded sub-types (10 leaf fields)
+        yc_leaf_fields = [n for n in bound.field_names
+                          if n.startswith("financial.yield_curves.")]
+        assert len(yc_leaf_fields) == 10
 
     def test_coarse_grained_is_1x1(self):
         """All coarse-grained fields should be 1×1 positions."""

@@ -19,7 +19,7 @@ __version__ = "0.0.2"
 from general_unified_world_model.schema.world import World
 
 # Projection
-from general_unified_world_model.projection.subset import WorldProjection, project, auto_canvas_size
+from general_unified_world_model.projection.subset import WorldProjection, project
 from general_unified_world_model.projection.temporal import TemporalTopology, TemporalEntity
 from general_unified_world_model.projection.transfer import TransferDistanceEstimator
 
