@@ -19,3 +19,7 @@ from general_unified_world_model.data.collectors import (
     SyntheticCollector,
     collect_all,
 )
+from general_unified_world_model.data.huggingface import (
+    hf_adapter,
+    hf_inspect,
+)
