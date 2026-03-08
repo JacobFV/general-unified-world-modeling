@@ -1,15 +1,19 @@
 """World Model Backbone: transformer with canvas-structured attention.
 
 The backbone operates on the canvas tensor (B, N, d_model) and produces
-output of the same shape. Two modes:
+output of the same shape. Three attention modes:
 
-1. CogVideoX grafting (default): load a pretrained CogVideoX diffusion
-   transformer and graft per-block loop embeddings + projection layers
-   onto it. Only ~0.1% of parameters are trainable. This provides rich
-   spatiotemporal priors from video pretraining.
+1. Dispatched attention (default when topology provided): per-connection
+   attention dispatch using canvas-engineering's AttentionDispatcher.
+   Each connection can use a different attention type (cross, linear,
+   gated, pooling, etc.) as declared in the topology.
 
-2. From scratch: train a small custom transformer. Useful for testing,
-   CPU-only environments, or when CogVideoX is unavailable.
+2. Masked attention (fallback): standard transformer with a single (N, N)
+   additive mask from the topology. All connections use the same attention.
+
+3. CogVideoX grafting: load a pretrained CogVideoX diffusion transformer
+   and graft per-block loop embeddings + projection layers. Only ~0.1% of
+   parameters are trainable. Uses full attention through frozen blocks.
 """
 
 from __future__ import annotations
@@ -39,14 +43,17 @@ class SinusoidalPositionalEncoding(nn.Module):
 
 
 class WorldModelBlock(nn.Module):
-    """Single transformer block with pre-norm and optional masked attention."""
+    """Single transformer block with pre-norm and optional masked or dispatched attention."""
 
-    def __init__(self, d_model: int, n_heads: int, d_ff: int, dropout: float = 0.1):
+    def __init__(self, d_model: int, n_heads: int, d_ff: int, dropout: float = 0.1,
+                 dispatcher=None):
         super().__init__()
         self.norm1 = nn.LayerNorm(d_model)
-        self.attn = nn.MultiheadAttention(
-            d_model, n_heads, dropout=dropout, batch_first=True
-        )
+        self.dispatcher = dispatcher
+        if dispatcher is None:
+            self.attn = nn.MultiheadAttention(
+                d_model, n_heads, dropout=dropout, batch_first=True
+            )
         self.norm2 = nn.LayerNorm(d_model)
         self.ff = nn.Sequential(
             nn.Linear(d_model, d_ff),
@@ -61,9 +68,12 @@ class WorldModelBlock(nn.Module):
         x: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        # Pre-norm self-attention
+        # Pre-norm attention (dispatched or masked)
         normed = self.norm1(x)
-        attn_out, _ = self.attn(normed, normed, normed, attn_mask=mask)
+        if self.dispatcher is not None:
+            attn_out = self.dispatcher(normed)
+        else:
+            attn_out, _ = self.attn(normed, normed, normed, attn_mask=mask)
         x = x + attn_out
 
         # Pre-norm feedforward
@@ -75,8 +85,12 @@ class WorldModelBackbone(nn.Module):
     """Transformer backbone for world model training.
 
     Takes a canvas tensor (B, N, d_model) and produces output of same shape.
-    The attention mask from the canvas topology constrains which positions
-    can attend to which.
+
+    When topology and layout are provided, uses per-connection attention
+    dispatch — each connection can use a different attention function type
+    (cross_attention, linear_attention, gated, pooling, etc.).
+
+    When only a mask is provided, falls back to standard masked attention.
 
     Args:
         d_model: Latent dimension per position.
@@ -85,8 +99,10 @@ class WorldModelBackbone(nn.Module):
         d_ff: Feedforward hidden dimension. Default: 4 * d_model.
         n_positions: Total canvas positions (for positional encoding).
         dropout: Dropout rate.
-        n_loops: Number of weight-sharing loops per block (from canvas-engineering).
+        n_loops: Number of weight-sharing loops per block.
             1 = standard transformer, 3 = optimal looped attention.
+        topology: CanvasTopology for per-connection attention dispatch.
+        layout: CanvasLayout for position index computation.
     """
 
     def __init__(
@@ -98,16 +114,31 @@ class WorldModelBackbone(nn.Module):
         n_positions: int = 8192,
         dropout: float = 0.1,
         n_loops: int = 1,
+        topology=None,
+        layout=None,
     ):
         super().__init__()
         d_ff = d_ff or 4 * d_model
 
         self.pos_enc = SinusoidalPositionalEncoding(d_model, max_len=n_positions)
+        self.use_dispatch = topology is not None and layout is not None
 
-        self.blocks = nn.ModuleList([
-            WorldModelBlock(d_model, n_heads, d_ff, dropout)
-            for _ in range(n_layers)
-        ])
+        if self.use_dispatch:
+            from canvas_engineering.dispatch import AttentionDispatcher
+            # Each block gets its own dispatcher (separate attention params)
+            dispatchers = [
+                AttentionDispatcher(topology, layout, d_model, n_heads, dropout)
+                for _ in range(n_layers)
+            ]
+            self.blocks = nn.ModuleList([
+                WorldModelBlock(d_model, n_heads, d_ff, dropout, dispatcher=dispatchers[i])
+                for i in range(n_layers)
+            ])
+        else:
+            self.blocks = nn.ModuleList([
+                WorldModelBlock(d_model, n_heads, d_ff, dropout)
+                for _ in range(n_layers)
+            ])
 
         self.n_loops = n_loops
         if n_loops > 1:
@@ -128,22 +159,26 @@ class WorldModelBackbone(nn.Module):
         Args:
             x: (B, N, d_model) canvas tensor.
             mask: (N, N) additive attention mask from topology.
+                Ignored when using dispatched attention.
 
         Returns:
             (B, N, d_model) output tensor.
         """
         x = self.pos_enc(x)
 
+        # When using dispatch, mask is ignored (dispatch handles connectivity)
+        effective_mask = None if self.use_dispatch else mask
+
         if self.n_loops > 1:
             for loop_idx in range(self.n_loops):
                 loop_emb = self.loop_embeddings[loop_idx]
                 x_loop = x + loop_emb
                 for block in self.blocks:
-                    x_loop = block(x_loop, mask=mask)
+                    x_loop = block(x_loop, mask=effective_mask)
                 x = x_loop
         else:
             for block in self.blocks:
-                x = block(x, mask=mask)
+                x = block(x, mask=effective_mask)
 
         return self.final_norm(x)
 
@@ -155,6 +190,7 @@ def build_world_model(
     d_ff: int | None = None,
     n_loops: int = 3,
     dropout: float = 0.1,
+    use_dispatch: bool = True,
 ) -> WorldModelBackbone:
     """Build a WorldModelBackbone sized for a compiled schema.
 
@@ -165,10 +201,20 @@ def build_world_model(
         d_ff: Feedforward dim. Default: 4 * d_model.
         n_loops: Looped attention iterations (3 is optimal).
         dropout: Dropout rate.
+        use_dispatch: Whether to use per-connection attention dispatch.
+            When True and the schema has a topology, each connection uses
+            its declared attention function. When False, falls back to
+            standard masked attention.
 
     Returns:
         WorldModelBackbone ready for training.
     """
+    topology = None
+    layout = None
+    if use_dispatch and hasattr(bound_schema, 'topology') and bound_schema.topology is not None:
+        topology = bound_schema.topology
+        layout = bound_schema.layout
+
     return WorldModelBackbone(
         d_model=bound_schema.layout.d_model,
         n_heads=n_heads,
@@ -177,6 +223,8 @@ def build_world_model(
         n_positions=bound_schema.layout.num_positions,
         dropout=dropout,
         n_loops=n_loops,
+        topology=topology,
+        layout=layout,
     )
 
 
@@ -193,6 +241,15 @@ class CogVideoXBackbone(nn.Module):
     Only loop parameters and projections are trainable (~0.1% of total).
 
     Interface matches WorldModelBackbone: (B, N, d_model) -> (B, N, d_model).
+
+    Note:
+        CogVideoX frozen blocks use full attention internally. Per-connection
+        attention dispatch (Connection.fn / RegionSpec.default_attn) is NOT
+        applied to frozen blocks — it requires a custom backbone that iterates
+        over topology.attention_ops(). Use WorldModelBackbone with
+        use_dispatch=True for per-connection attention dispatch from scratch,
+        or use canvas_engineering.AttentionDispatcher directly in a custom
+        backbone.
     """
 
     def __init__(
@@ -278,19 +335,6 @@ class CogVideoXBackbone(nn.Module):
 
         Returns:
             (B, N, d_model) output tensor.
-
-        Note:
-            CogVideoX blocks use full attention; the canvas topology mask is
-            NOT applied. The topology is encoded implicitly via positional
-            encoding and the training dynamics.
-
-            TODO: To support per-connection attention dispatch (Connection.fn /
-            RegionSpec.default_attn from canvas-engineering), the forward pass
-            should iterate over topology.attention_ops() and call resolved
-            attention functions per (src, dst) pair instead of running all
-            positions through the same block. This would enable heterogeneous
-            attention types (e.g. linear attention for fast-frequency fields,
-            full attention for cross-domain connections).
         """
         B, N, _ = x.shape
 
