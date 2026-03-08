@@ -37,7 +37,7 @@ from general_unified_world_model.rendering import (
 )
 from canvas_engineering import compile_schema, ConnectivityPolicy
 
-ASSETS = Path(__file__).parent.parent / "assets"
+ASSETS = Path(__file__).parent.parent / "docs" / "assets"
 ASSETS.mkdir(exist_ok=True)
 
 DPI = 200

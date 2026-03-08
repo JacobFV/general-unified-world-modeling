@@ -14,7 +14,7 @@
 
 <!-- Figure: Heatmap of the full 857-field world model packed onto a canvas grid. Each rectangular region is color-coded by semantic domain (financial=teal, macro=blue, regime=red, narratives=purple, etc.). The spatial layout shows how fields are strip-packed left-to-right, top-to-bottom, with larger domains (financial, country blocks) occupying more area. -->
 <p align="center">
-<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/canvas_full_world.png" width="100%" alt="Full World Model — 857 fields on 128x128 canvas" />
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/docs/assets/canvas_full_world.png" width="100%" alt="Full World Model — 857 fields on 128x128 canvas" />
 </p>
 <p align="center"><em>Full World Model — 857 fields allocated on a canvas. Each colored region is a semantic domain.</em></p>
 
@@ -197,7 +197,7 @@ proj = WorldProjection(
 
 <!-- Figure: LaTeX-style directed acyclic graph with rounded pastel boxes and arrows showing causal flow. Nodes: Regime State (red) → Macro Context (blue) → Financial Markets (teal) → ACME Corp (green). Executive Team (yellow) → ACME Corp. ACME Corp ←→ RIVAL Corp (dashed competitive edge). ACME Corp → Business Forecasts (purple output). Arrows show directional causality. -->
 <p align="center">
-<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/usecase_ceo.png" width="90%" alt="CEO use case — causal interaction graph" />
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/docs/assets/usecase_ceo.png" width="90%" alt="CEO use case — causal interaction graph" />
 </p>
 <p align="center"><em>Causal interaction graph: regime conditions macro and financial context, which flows into firm dynamics. Executive decisions influence the firm. Competitive dynamics (dashed) between ACME and RIVAL. Forecasts are the structured output.</em></p>
 
@@ -220,7 +220,7 @@ proj = WorldProjection(
 
 <!-- Figure: DAG showing policy transmission. Regime State (red) → US Economy, China Economy, EU Economy (blue boxes). Bidirectional arrows between country pairs for trade/financial linkages. Policy Interventions (orange) → Financial System (teal) → US Economy → Macro Forecasts (purple). Multiple country outputs converge on forecasts. -->
 <p align="center">
-<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/usecase_government.png" width="90%" alt="Government use case — causal interaction graph" />
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/docs/assets/usecase_government.png" width="90%" alt="Government use case — causal interaction graph" />
 </p>
 <p align="center"><em>Policy transmission graph: regime state conditions all economies. Bilateral trade and financial linkages connect countries (bidirectional arrows). Interventions propagate through the financial system and the domestic economy to produce structured forecasts.</em></p>
 
@@ -240,7 +240,7 @@ proj = WorldProjection(
 
 <!-- Figure: Minimal DAG for agent use. Events (orange) → User (yellow) and Organization (green), bidirectional arrow between User ↔ Organization. Regime State (red, compressed) → Recession Forecast (purple). Small graph showing minimal world context needed for an autonomous agent. -->
 <p align="center">
-<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/usecase_agent.png" width="70%" alt="Agent use case — causal interaction graph" />
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/docs/assets/usecase_agent.png" width="70%" alt="Agent use case — causal interaction graph" />
 </p>
 <p align="center"><em>Minimal world context for an agent: real-time events feed into the user and organization models. Regime state drives recession forecasts. User and organization are bidirectionally linked.</em></p>
 
@@ -461,8 +461,8 @@ Each field occupies a contiguous region on the (H, W) canvas. Colors indicate se
 
 <!-- Figure: Two side-by-side canvas heatmaps on dark backgrounds. Left: a compact macro-only projection (~40 fields) showing blue/teal blocks for yield curves, credit, macro output, inflation, labor, housing, and red for regime. Right: a larger hedge fund projection (~200 fields) with the same domains plus firm-specific blocks (AAPL, NVDA) in green. Fields are strip-packed left-to-right, top-to-bottom. -->
 <p align="center">
-<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/canvas_macro_projection.png" width="48%" alt="Macro Model Projection" />
-<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/canvas_hedge_fund.png" width="48%" alt="Hedge Fund Projection" />
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/docs/assets/canvas_macro_projection.png" width="48%" alt="Macro Model Projection" />
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/docs/assets/canvas_hedge_fund.png" width="48%" alt="Hedge Fund Projection" />
 </p>
 <p align="center"><em>Left: Macro model projection (~40 fields, auto-sized canvas). Right: Hedge fund projection with AAPL+NVDA (~200 fields).</em></p>
 
@@ -472,8 +472,8 @@ Nodes are semantic domains, edges show attention connectivity between them. Node
 
 <!-- Figure: Two network graphs on dark backgrounds. Each node is a colored circle labeled with a domain name (financial, country_us, regime, etc.) with a glow effect. Directed arrows between nodes show cross-domain attention connections — thicker/brighter arrows mean stronger connectivity. Self-loops shown as halos around nodes. Left graph: macro model with tight cluster around rates/credit/macro. Right graph: hedge fund model with additional firm nodes (AAPL, NVDA) connected to financial and macro domains. -->
 <p align="center">
-<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/topology_macro.png" width="48%" alt="Macro Model Topology" />
-<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/topology_hedge_fund.png" width="48%" alt="Hedge Fund Model Topology" />
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/docs/assets/topology_macro.png" width="48%" alt="Macro Model Topology" />
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/docs/assets/topology_hedge_fund.png" width="48%" alt="Hedge Fund Model Topology" />
 </p>
 <p align="center"><em>Left: A macroeconomic model's domain graph — macro, rates, credit, and regime are tightly coupled. Right: A hedge fund model adds firm-level nodes and cross-domain positioning.</em></p>
 
@@ -485,7 +485,7 @@ Time series views of world model fields, auto-generated or from real observation
 
 <!-- Figure: Multi-panel time series chart on dark background. 6 subplots showing synthetic financial data: yield curves (2Y/10Y/30Y rates), credit spreads (IG/HY), equity indices (S&P 500 proxy), FX (DXY, EUR/USD), commodity prices (crude, gold), and crypto (BTC, ETH). Each line is color-coded by field, with realistic-looking synthetic dynamics. -->
 <p align="center">
-<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/financial_charts.png" width="80%" alt="Financial Charts" />
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/docs/assets/financial_charts.png" width="80%" alt="Financial Charts" />
 </p>
 
 ### Geopolitical state map
@@ -494,10 +494,10 @@ Each country's latent state vector is projected to RGB via PCA — the color is 
 
 <!-- Figure: Animated GIF of a rotating 3D orthographic globe on dark background. Countries are filled with distinct RGB colors derived from PCA projection of their state vectors. US is one color, China another, EU members share a color. Country codes (US, CN, EU, etc.) labeled in white. The globe continuously rotates 360 degrees, showing all hemispheres. Below it: static dual-hemisphere view showing both sides simultaneously. -->
 <p align="center">
-<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/geopolitical_globe.gif" width="50%" alt="Rotating Geopolitical Globe" />
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/docs/assets/geopolitical_globe.gif" width="50%" alt="Rotating Geopolitical Globe" />
 </p>
 <p align="center">
-<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/geopolitical_map.png" width="80%" alt="Geopolitical Dual-Hemisphere Map" />
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/docs/assets/geopolitical_map.png" width="80%" alt="Geopolitical Dual-Hemisphere Map" />
 </p>
 
 ### Regime dashboard
@@ -506,7 +506,7 @@ Horizontal bars for the 17 regime state fields — value magnitude, no decoratio
 
 <!-- Figure: Minimal horizontal bar chart on dark background. 17 rows, each labeled with a regime field name (growth_regime, inflation_regime, financial_cycle, credit_cycle, liquidity_regime, cooperation_vs_fragmentation, peace_vs_conflict, hegemonic_stability, etc.). Bar length shows absolute value, color ranges from cold steel blue (low) through neutral gray to signal red (high). Monospace labels with numeric values. A thin heatmap strip at the bottom shows the compressed world state vector. -->
 <p align="center">
-<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/regime_dashboard.png" width="80%" alt="Regime Dashboard" />
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/docs/assets/regime_dashboard.png" width="80%" alt="Regime Dashboard" />
 </p>
 
 ### Social graph (CEO perspective)
@@ -515,7 +515,7 @@ First-person entity network. Focal entity centered, others positioned by connect
 
 <!-- Figure: Network graph on dark background with a central focal node (person or firm) surrounded by connected entities in concentric rings. Inner ring: strongly connected entities (firms, sectors). Outer ring: weakly connected (forecasts, events). Node shapes vary by entity type: circles for people, squares for firms, diamonds for countries, triangles for sectors, hexagons for regime. Edge colors: amber for strong links (>0.6 weight), teal for moderate (>0.3), dark blue for weak. Field count displayed as a number inside each node. Legend in upper-right shows node types and edge weight categories. -->
 <p align="center">
-<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/assets/social_graph_ceo.png" width="80%" alt="CEO Social Graph" />
+<img src="https://raw.githubusercontent.com/JacobFV/general-unified-world-modeling/develop/docs/assets/social_graph_ceo.png" width="80%" alt="CEO Social Graph" />
 </p>
 
 ### Rendering API

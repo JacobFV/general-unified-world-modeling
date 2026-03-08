@@ -6,7 +6,12 @@
 [![Tests](https://github.com/JacobFV/general-unified-world-modeling/actions/workflows/ci.yml/badge.svg)](https://github.com/JacobFV/general-unified-world-modeling/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
-The General Unified World Model (GUWM) encodes 857 fields across 19 semantic layers into a single structured latent space. It learns from heterogeneous, partial data -- no dataset needs to cover every field. The model discovers cross-domain dynamics (how inflation drives bond yields, how policy shapes commodity markets) through shared latent structure and masked training.
+The General Unified World Model (GUWM) encodes **857 fields** across **19 semantic layers** into a single structured latent space. It learns from heterogeneous, partial data -- no dataset needs to cover every field. The model discovers cross-domain dynamics (how inflation drives bond yields, how policy shapes commodity markets) through shared latent structure and masked training.
+
+<figure markdown>
+  ![Full world model canvas](assets/canvas_full_world.png){ loading=lazy }
+  <figcaption>All 857 fields packed onto a 128x128 canvas. Color = domain layer. Each pixel is a latent position with its own semantic identity.</figcaption>
+</figure>
 
 ## Install
 
@@ -76,6 +81,29 @@ predictions = model.predict()
 print(predictions["forecasts.macro.recession_prob_3m"])
 ```
 
+## Visualizations
+
+### Geopolitical state — rotating globe
+
+<figure markdown>
+  ![Geopolitical globe](assets/geopolitical_globe.gif){ loading=lazy }
+  <figcaption>World model geopolitical state projected to RGB on a rotating globe. Each nation's color encodes a compressed vector of political stability, conflict risk, and economic alignment. Generated from mock data — trained model predictions coming soon.</figcaption>
+</figure>
+
+### Financial markets dashboard
+
+<figure markdown>
+  ![Financial charts](assets/financial_charts.png){ loading=lazy }
+  <figcaption>Financial layer time series: yields, credit spreads, FX, equities, and volatility surface. The world model tracks all of these as simultaneous fields on a shared canvas.</figcaption>
+</figure>
+
+### Regime state dashboard
+
+<figure markdown>
+  ![Regime dashboard](assets/regime_dashboard.png){ loading=lazy }
+  <figcaption>Regime latent: growth, inflation, financial cycle, credit cycle, liquidity, fragility, and systemic risk. The regime determines which causal channels are active.</figcaption>
+</figure>
+
 ## The 19 layers
 
 | Layer | Fields | Frequency | What it models |
@@ -96,15 +124,13 @@ print(predictions["forecasts.macro.recession_prob_3m"])
 | Interventions | monetary, fiscal, regulatory | Monthly+ | Policy actions and their effects |
 | Forecasts | recession prob, credit stress, conflict | Output | Predictive output fields |
 
-## Documentation
+See the full [Schema Reference](schema.md) for mermaid diagrams, field listings, and design rationale for every layer.
 
-| Page | Contents |
-|------|----------|
-| [Architecture](architecture.md) | Schema layers, projection system, canvas integration |
-| [Use Cases](use_cases.md) | Practical applications with code |
-| [Training Pipeline](training.md) | Heterogeneous data, masked loss, adapters |
-| [CogVideoX Backbone](cogvideox.md) | Pretrained video diffusion grafting |
-| [DAG Curriculum](dag_curriculum.md) | Fork-join training across domains |
-| [Datasets](datasets.md) | Real-world data sources for all 19 layers |
-| [API Reference](api.md) | Complete API documentation |
-| [Examples](examples.md) | Runnable code snippets |
+## Status
+
+!!! warning "Coming soon"
+    The world model is under active development. The schema, projection system, training pipeline, and CogVideoX backbone are implemented and tested. Large-scale training on real data is in progress on H100 GPUs. Trained checkpoints and inference API are coming soon.
+
+    **What works today**: Schema compilation, projection, data adapters, heterogeneous training with masked loss, DAG curriculum, CogVideoX grafting, LLM-driven curriculum design.
+
+    **Coming soon**: Pretrained checkpoint release, inference API, real-time data ingestion, hosted API.

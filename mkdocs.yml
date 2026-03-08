@@ -27,8 +27,11 @@ theme:
     - navigation.sections
     - navigation.expand
     - navigation.top
-    - navigation.tabs
+    - navigation.instant
+    - navigation.tracking
+    - navigation.path
     - toc.follow
+    - toc.integrate
   icon:
     repo: fontawesome/brands/github
 
@@ -58,10 +61,11 @@ plugins:
 
 nav:
   - Home: index.md
-  - Getting Started:
-    - Architecture: architecture.md
+  - Architecture:
+    - Overview: architecture.md
     - Schema Reference: schema.md
-    - Use Cases: use_cases.md
+  - Use Cases:
+    - Overview: use_cases.md
   - Training:
     - Training Pipeline: training.md
     - CogVideoX Backbone: cogvideox.md

@@ -4,6 +4,11 @@
 
 The world model schema is a nested dataclass hierarchy with **19 layers and 857 fields**. Each field is a `canvas_engineering.Field` with declared temporal frequency, loss weight, and semantic type. Fields are arranged on a `(T, H, W)` canvas grid where the topology defines which positions attend to each other.
 
+<figure markdown>
+  ![Full world model canvas](assets/canvas_full_world.png){ loading=lazy }
+  <figcaption>All 857 fields packed onto a 128x128 canvas grid. Each colored region is a semantic domain — financial (teal), macro (blue), regime (red), etc. Larger domains occupy more canvas area. Source: <a href="https://github.com/JacobFV/general-unified-world-modeling/blob/develop/scripts/generate_assets.py">generate_assets.py</a></figcaption>
+</figure>
+
 ```mermaid
 graph TD
     subgraph "Planetary (slow, structural)"
@@ -65,6 +70,8 @@ graph TD
     style FOR fill:#6f6,stroke:#333,stroke-width:3px
 ```
 
+See the full [Schema Reference](schema.md) for mermaid diagrams and design rationale for every layer.
+
 ## Temporal frequency classes
 
 Eight frequency classes span sub-minute to multi-year. Each field's `period` determines how often it updates on the canvas:
@@ -102,12 +109,31 @@ Each dynamic entity instantiates a full dataclass (e.g., `Business` has 57 field
 
 `WorldProjection` declares which parts of the schema to include. `project()` compiles it to a `BoundSchema` with canvas layout and topology:
 
+<div class="grid" markdown>
+
+<figure markdown>
+  ![Macro projection](assets/canvas_macro_projection.png){ loading=lazy }
+  <figcaption>Macro model projection: 32x32 canvas with US macro, yields, credit, regime, and forecasts.</figcaption>
+</figure>
+
+<figure markdown>
+  ![Hedge fund projection](assets/canvas_hedge_fund.png){ loading=lazy }
+  <figcaption>Hedge fund projection: 64x64 canvas with financial, macro, firms, and regime.</figcaption>
+</figure>
+
+</div>
+
 ```mermaid
 graph LR
-    A["World()\n857 fields"] --> B["WorldProjection\ninclude/exclude/entities"]
-    B --> C["ProjectedWorld\nsubset of fields"]
-    C --> D["compile_schema()\ncanvas-engineering"]
-    D --> E["BoundSchema\nlayout + topology + mask"]
+    A["World()
+857 fields"] --> B["WorldProjection
+include/exclude/entities"]
+    B --> C["ProjectedWorld
+subset of fields"]
+    C --> D["compile_schema()
+canvas-engineering"]
+    D --> E["BoundSchema
+layout + topology + mask"]
 ```
 
 1. Start with full `World()` instance (857 fields)
@@ -130,6 +156,24 @@ When `H=None, W=None`, `compile_schema` auto-computes the canvas size from the n
 ```python
 bound = project(proj, T=1, d_model=64)  # H, W auto-sized
 ```
+
+## Topology
+
+The topology defines which canvas positions attend to which. This is the compute graph of the transformer.
+
+<div class="grid" markdown>
+
+<figure markdown>
+  ![Macro topology](assets/topology_macro.png){ loading=lazy }
+  <figcaption>Macroeconomic model topology: domain-to-domain attention connections.</figcaption>
+</figure>
+
+<figure markdown>
+  ![Hedge fund topology](assets/topology_hedge_fund.png){ loading=lazy }
+  <figcaption>Hedge fund topology: financial, macro, firm, and regime domains with cross-attention.</figcaption>
+</figure>
+
+</div>
 
 ## Canvas-engineering integration
 
