@@ -6,8 +6,11 @@ have demographics. Traditional approaches either:
   (a) throw out data that's missing fields — wasteful
   (b) impute missing fields — introduces noise
 
-Canvas engineering gives us a third option:
-  (c) mask missing fields in the loss — train on what you have
+Canvas engineering gives us two complementary tools:
+  (c1) fog — at projection time, collapse excluded schema sub-types into
+       1×1 learned placeholders that still participate in attention
+  (c2) mask — at training time, zero out loss for fields that lack data
+       in the current dataset (the model still predicts them, just no gradient)
 
 Each dataset declares which fields it populates. The trainer:
   1. Places available data into the canvas at the correct positions

@@ -27,7 +27,9 @@ Traditional approaches either:
 - **(a)** restrict to the intersection — throw out data missing any field
 - **(b)** impute missing values — introduce noise
 
-**General Unified World Model** takes option **(c)**: mask missing fields in the loss, train on what you have. Each dataset declares which fields it populates. The model learns the joint distribution across all modalities, even though no single dataset contains everything.
+**General Unified World Model** uses two complementary tools:
+- **(c1) Fog** — at projection time, collapse excluded schema sub-types into 1×1 learned "fog vectors" that represent the uncertainty and simplification of causal structures beyond your projection's concern. A hedge fund modeling only `financial.yield_curves` still gets a `financial._fog_credit` vector that learns compressed dynamics for the unmodeled credit sub-type.
+- **(c2) Mask** — at training time, zero out the loss for fields that lack data in the current dataset. The model still predicts everywhere, but only backpropagates through fields with ground truth. A GDP-only dataset trains the macro fields and the shared regime latent without needing equity prices.
 
 The key enabler is **canvas-engineering** — a type system for multimodal latent computation. Each field in the world model occupies specific positions on a 3D `(T, H, W)` canvas grid, with declared temporal frequency, loss weight, and connectivity. The topology is the compute graph.
 
@@ -242,25 +244,80 @@ proj = WorldProjection(
 
 ## Training architecture
 
-### Phase 1: Independent domains (parallelizable)
+The training curriculum is a **DAG** (directed acyclic graph) where fork nodes train domain-specific models in parallel and join nodes merge them by weight averaging. The topology is driven by semantic distance between domains.
 
-Train each domain separately on small canvases. Financial markets, US macro, narratives, etc. each get their own backbone. This is fast because canvases are small.
+### Declare a curriculum in YAML
 
-### Phase 2: Domain coupling
+```yaml
+# curricula/standard.yaml
+name: my_world_model
+defaults:
+  H: 48
+  W: 48
+  d_model: 64
+  n_steps: 5000
 
-Merge causally adjacent domains (financial + macro, narratives + financial). Pretrained encoders/decoders transfer via matching field names. The shared regime latent begins learning cross-domain structure.
+stages:
+  - name: foundations
+    parallel:
+      - subject: "Core financial markets: yield curves, credit, equities"
+        datasets: [yahoo_finance, fred_rates]
+      - subject: "US macroeconomic fundamentals: GDP, inflation, employment"
+        datasets: [fred_macro]
+      - subject: "Natural resources and commodity supply chains"
+        datasets: [yahoo_commodities]
 
-### Phase 3: Full integration
+  - name: cross_domain
+    builds_on: foundations
+    parallel:
+      - subject: "How macro conditions drive financial markets"
+        datasets: [fred_macro, yahoo_finance]
+        H: 64
+        W: 64
 
-All domains on one canvas. The regime state gets gradient from everything. This is the most expensive phase but leverages all pretrained structure.
+  - name: integration
+    builds_on: cross_domain
+    parallel:
+      - subject: "Full world model"
+        include: ["*"]
+        H: 128
+        W: 128
+        n_steps: 10000
+```
 
-### Phase 4: Task-specific fine-tuning
+```python
+from general_unified_world_model.training.dag_curriculum import CurriculumSpec, DAGCurriculumTrainer
 
-Freeze backbone. Train projection-specific heads (recession prediction, equity regime, conflict escalation).
+# Load from YAML
+spec = CurriculumSpec.from_yaml("curricula/standard.yaml")
+nodes = spec.to_training_nodes()
+
+# Or describe in natural language — keywords resolve to field paths
+from general_unified_world_model.training.dag_curriculum import resolve_subject
+resolve_subject("How inflation drives yield curves and credit spreads")
+# → ['country_us.macro.inflation', 'financial.yield_curves', 'financial.credit', 'regime']
+```
+
+Each subject description is resolved to world model field paths via keyword matching. The `builds_on` field defines the DAG: all subjects in a stage inherit merged weights from the previous stage.
+
+### The 4-tier standard curriculum
+
+1. **Foundation** (6 parallel nodes): Financial, macro, politics, resources, tech, narratives — each trained independently on small canvases (32-48px)
+2. **Cross-domain** (3 parallel nodes): Macro→finance, geopolitics→commodities, narratives→markets — merging pretrained parent weights
+3. **Complex** (2 parallel nodes): Corporate strategy, policy impact — multi-parent joins
+4. **Integration** (1 node): Full 128×128 canvas, all domains, all cross-domain connections active
+
+### Weight transfer at join points
+
+At each join, parent backbones are **averaged by parameter name**. Field-specific encoders/decoders transfer via matching field names — this works because the ontology is stable across projections.
 
 ### Why this works
 
 The semantic type system lets us proxy **generalization distance** between any two modalities by their **semantic embedding distance**. GDP growth and industrial production are semantically close — their latent dynamics will be correlated. GDP growth and seismic risk are semantically far — nearly independent. This guides curriculum design: couple close domains first, distant later.
+
+### Distributed topology — not a bottleneck
+
+The architecture preserves the real world's distributed interaction structure. Domains connect directly to each other (financial ↔ country, firm ↔ sector, events → markets) via cross-domain attention connections. The regime latent is one peer among many — it influences 5 domains but does NOT sit on all information pathways. 98% of attention is intra-domain (dense), 2% is cross-domain (sparse, multi-target). There is no information bottleneck.
 
 ## Heterogeneous data training
 
@@ -279,12 +336,23 @@ Both A and B train the **shared regime latent**, even though their field coverag
 
 ## Data adapters
 
-Built-in adapters for common data sources:
+Built-in adapters and collectors for 7+ data sources:
+
+| Source | Type | API Key | Coverage |
+|--------|------|---------|----------|
+| FRED | Collector | Required | 42 macro/financial series |
+| Yahoo Finance | Collector | None | Equities, FX, commodities, crypto |
+| World Bank | Collector | None | 10 indicators × 7 countries |
+| IMF | Collector | None | WEO forecasts + commodity prices |
+| BIS | Collector | None | Credit, property, FX, debt |
+| NOAA Climate | Collector | Optional | Temperature, CO2, sea level |
+| HuggingFace | Adapter | None | Auto-mapped from any HF dataset |
+| Synthetic | Collector | None | 57 correlated fields for testing |
 
 ```python
-from general_unified_world_model.data.adapters import fred_adapter, yahoo_finance_adapter
+from general_unified_world_model.data import fred_adapter, yahoo_finance_adapter
 
-# FRED: 50+ macro series mapped to world model fields
+# FRED: 42 macro series mapped to world model fields
 fred_spec, fred_data = fred_adapter(api_key="...", start_date="2010-01-01")
 
 # Yahoo Finance: equities, FX, commodities, crypto
@@ -293,8 +361,39 @@ yahoo_spec, yahoo_data = yahoo_finance_adapter(
     firm_tickers={"AAPL": "firm_AAPL"},
 )
 
-# Generic CSV/Parquet
-from general_unified_world_model.data.adapters import tabular_adapter
+# Collect all available data at once
+from general_unified_world_model.data import collect_all
+sources = collect_all(api_keys={"fred": "..."})
+```
+
+### Auto-map any HuggingFace dataset
+
+```python
+from general_unified_world_model.data import hf_adapter, hf_inspect
+
+# Preview what would be mapped
+info = hf_inspect("fred-economic-data/FRED-MD")
+print(f"{info['mapped_count']}/{info['n_columns']} columns auto-mapped")
+print(info['unmapped_columns'])  # columns that need manual overrides
+
+# Load and auto-map
+spec, data = hf_adapter("fred-economic-data/FRED-MD")
+
+# With manual overrides for ambiguous columns
+spec, data = hf_adapter(
+    "some-org/custom-dataset",
+    column_overrides={"gdp_yoy": "country_us.macro.output.gdp_nowcast"},
+    transform_overrides={"gdp_yoy": "z_score"},
+)
+```
+
+The auto-mapper inspects column names, dataset tags, and description to infer field paths.
+Unmapped columns are logged — use `hf_inspect()` to preview before committing.
+
+### Generic CSV/Parquet
+
+```python
+from general_unified_world_model.data import tabular_adapter
 spec, data = tabular_adapter(
     "My Dataset", "data.csv",
     column_mappings={"gdp_growth": "country_us.macro.output.gdp_nowcast"},
@@ -543,12 +642,15 @@ src/general_unified_world_model/
 │   ├── temporal.py   # Temporal entity management
 │   └── transfer.py   # Semantic transfer distance
 ├── training/         # Training infrastructure
-│   ├── backbone.py   # Transformer backbone
+│   ├── backbone.py       # Transformer backbone
 │   ├── heterogeneous.py  # Masked canvas trainer
-│   ├── diffusion.py  # Diffusion objective
-│   └── curriculum.py # Multi-phase curriculum
-├── data/             # Data adapters
-│   └── adapters.py   # FRED, Yahoo, PMI, earnings, news, CSV
+│   ├── diffusion.py      # Diffusion objective
+│   ├── curriculum.py     # Phase-based curriculum
+│   └── dag_curriculum.py # DAG curriculum + YAML + NL spec
+├── data/             # Data adapters & collectors
+│   ├── adapters.py   # FRED, Yahoo, PMI, earnings, news, CSV
+│   ├── collectors.py # FRED, Yahoo, WorldBank, IMF, BIS, NOAA, Synthetic
+│   └── huggingface.py # Auto-map any HuggingFace dataset
 ├── rendering/        # Visualization system
 │   ├── base.py       # Renderer protocol, RenderContext, registry
 │   ├── canvas.py     # Canvas heatmap (field allocation view)
